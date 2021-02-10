@@ -1,0 +1,546 @@
+
+Estado de construcción Cobertura de código
+
+
+
+Vista de cámara
+CameraView es una biblioteca de alto nivel bien documentada que facilita la captura de imágenes y videos, aborda la mayoría de los problemas y necesidades comunes, y aún lo deja con flexibilidad donde sea necesario. Ver CAMBIO .
+
+compilar ' com.otaliastudios: cameraview: 1.5.0 '
+Asegúrese de que los repositorios de su proyecto incluyan jcenter():
+
+allprojects {
+  repositorios {
+    jcenter ()
+  }
+}
+  
+
+Esta fue una bifurcación de CameraKit-Android , originalmente una bifurcación de CameraView de Google , pero se ha reescrito por completo . Consulte a continuación para obtener una lista de lo que se hizo y la información de licencia .
+
+Características
+Captura perfecta de imágenes y videos
+Soporte de gestos (toque para enfocar, pellizcar para hacer zoom y mucho más)
+Manejo de permisos del sistema
+Comportamiento de tamaño inteligente
+Vista previa: cree un archivo CameraViewde cualquier tamaño
+Vista previa: centrar el interior o los comportamientos de recorte del centro
+Salida: utilidades útiles para establecer el tamaño de salida
+Resultado: recorte automático para que coincida con los CameraViewlímites de la vista previa
+Dibujo de cuadrícula incorporado
+Múltiples métodos de captura
+Tome fotografías de alta resolución con capturePicture
+Tome instantáneas rápidas como un fotograma congelado de la vista previa concaptureSnapshot
+Controle HDR, flash, zoom, balance de blancos, corrección de exposición y más
+Procesamiento Frame apoyo
+Soporte de metadatos para imágenes y videos
+Etiquetas de orientación detectadas automáticamente
+Conecta etiquetas de ubicación con setLocation()API
+CameraUtils para ayudar con mapas de bits y orientaciones
+Manejo de errores
+Seguro para subprocesos, bien probado
+Ligero , sin dependencias, solo soporteExifInterface
+Funciona hasta el nivel de API 15
+Docs
+Uso
+Captura de imágenes
+Captura de video
+Otros eventos de cámara
+Gestos
+Comportamiento de dimensionamiento
+Tamaño de vista previa
+Tamaño de foto
+Controles de cámara
+Procesamiento de cuadros
+Otras API
+Comportamiento de permisos
+Inicio sesión
+Problemas específicos del dispositivo
+Mapa vial
+Uso
+Para usar el motor CameraView, simplemente agregue un CameraViewa su diseño:
+
+< com .otaliastudios.cameraview.CameraView
+     android : id = " @ + id / camera "
+     android : keepScreenOn = " true "
+     android : layout_width = " wrap_content "
+     android : layout_height = " wrap_content " />
+CameraViewtiene muchos atributos XML, así que sigue leyendo. Asegúrese de anular onResume, onPausey onDestroyen su actividad o fragmento, y llame CameraView.start(), stop() y destroy().
+
+@Override 
+protected  void onResume () {
+     super . En resumen();
+    cameraView . comienzo();
+}
+
+@Override 
+protected  void onPause () {
+     super . onPause ();
+    cameraView . alto();
+}
+
+@Override 
+protected  void onDestroy () {
+     super . onDestroy ();
+    cameraView . destruir();
+}
+Captura de imágenes
+Para capturar una imagen simplemente llame CameraView.capturePicture(). Asegúrese de configurar a CameraListener para manejar la devolución de llamada de imagen.
+
+la cámara . addCameraListener ( new  CameraListener () {
+     @Override 
+    public  void  onPictureTaken ( byte [] picture ) {
+         // Crea un mapa de bits o un archivo ... 
+        // CameraUtils leerá la orientación EXIF ​​por ti, en un hilo de trabajo. 
+        CameraUtils . decodeBitmap (imagen , ... );
+    }
+});
+
+la cámara . tomar foto();
+También puede utilizar camera.captureSnapshot()para capturar un fotograma de vista previa. Esto es más rápido, aunque asegurará resultados de menor calidad.
+
+Captura de video
+Para capturar video, simplemente llame CameraView.startCapturingVideo(file)para comenzar y CameraView.stopCapturingVideo()para terminar. Asegúrese de configurar un CameraListenerpara manejar la devolución de llamada de video.
+
+la cámara . addCameraListener ( new  CameraListener () {
+     @Override 
+    public  void  onVideoTaken ( File  video ) {
+         // El archivo es el mismo que pasó antes. 
+        // Ahora tiene un video MP4.
+    }
+});
+
+// Seleccionar archivo de salida. Asegúrate de tener permisos de escritura. 
+Archivo archivo =  ... ;
+la cámara . startCapturingVideo (archivo);
+
+// Más tarde ... deja de grabar. Esto activará onVideoTaken (). 
+la cámara . stopCapturingVideo ();
+
+// También puede usar una de las restricciones de video: 
+// videoMaxSize y videoMaxDuration dejarán de grabar automáticamente cuando esté satisfecho. 
+la cámara . setVideoMaxSize ( 100000 );
+la cámara . setVideoMaxDuration ( 5000 );
+la cámara . startCapturingVideo (archivo);
+Otros eventos de cámara
+Asegúrese de que puede reaccionar ante diferentes eventos de cámara configurando una o más CameraListener instancias. Todos estos se ejecutan en el hilo de la interfaz de usuario.
+
+la cámara . addCameraListener ( nuevo  CameraListener () {
+
+    / **
+      * Notifica que se abrió la cámara. 
+     * El objeto de opciones recopila todas las opciones admitidas por la cámara actual. 
+* / @Override public void onCameraOpened ( opciones de CameraOptions ) {}     
+    
+       
+
+    / **
+      * Notifica que la sesión de cámara se cerró. 
+* / @Override public void onCameraClosed () {}     
+    
+      
+
+    / **
+      * Notifica un error durante la instalación o configuración de la cámara. 
+     * Por el momento, los errores que se pasan aquí son irrecuperables. Cuando se llama a esto, 
+     * la cámara se ha liberado y presumiblemente muestra una vista previa en negro. 
+     * 
+     * Este es el momento adecuado para mostrar un diálogo de error al usuario. 
+* / @Override public void onCameraError ( error CameraException ) {}     
+    
+       
+
+    / **
+      * Notifica que una imagen capturada previamente con capturePicture () 
+     * o captureSnapshot () está lista para mostrarse o guardarse. 
+     * 
+     * Si planea obtener un mapa de bits, puede usar CameraUtils.decodeBitmap () 
+     * para decodificar la matriz de bytes teniendo en cuenta la orientación. 
+* / @Override public void onPictureTaken ( byte [] imagen ) {}     
+    
+      
+
+    / **
+      * Notifica que una captura de video acaba de finalizar. El parámetro de archivo es el que 
+     * se pasó a startCapturingVideo (Archivo), o un archivo de video de respaldo. 
+* / @Override public void onVideoTaken ( Archivo de video ) {}     
+    
+       
+    
+    / **
+      * Notifica que el dispositivo se inclinó o que el desplazamiento de la ventana cambió. 
+     * La orientación pasada se puede usar para alinear vistas (por ejemplo, botones) con la 
+     ventana 
+actual * de la cámara para que aparezcan correctamente orientadas para el usuario. * / @Override public void onOrientationChanged ( orientación int ) {}     
+    
+       
+
+    / **
+      * Notifica que el usuario interactuó con la pantalla y comenzó a enfocar con un gesto, 
+     * y el enfoque automático está tratando de enfocar alrededor de esa área. 
+     * Esto se puede usar para dibujar cosas en la pantalla. 
+* / @Override public void onFocusStart ( punto PointF ) {}         
+    
+       
+    
+    / **
+      * Notifica que un evento de enfoque por gestos acaba de finalizar y la cámara convergió 
+     * a un nuevo enfoque (y posiblemente exposición y balance de blancos). 
+* / @Override public void onFocusEnd ( booleano exitoso , punto PointF ) {}     
+    
+        
+    
+    / **
+      * Notifica que un gesto con el dedo acaba de hacer 
+     que se cambie 
+el zoom de la cámara *. Esto se puede utilizar, por ejemplo, para dibujar una barra de búsqueda. * / @Override public void onZoomChanged ( float newValue , float [] límites , PointF [] dedos ) {}     
+    
+       
+    
+    / **
+      * Notifica que un gesto con el dedo acaba de provocar el cambio de la corrección de exposición de la cámara 
+     *. Esto se puede utilizar, por ejemplo, para dibujar una barra de búsqueda. 
+* / @Override public void onExposureCorrectionChanged ( flotar newValue , flotar [] límites , PointF [] dedos ) {}     
+     
+       
+
+});
+Gestos
+CameraViewEscuche muchos gestos diferentes dentro de sus límites. Tiene la oportunidad de asignar estos gestos a acciones particulares o controles de la cámara, utilizando mapGesture(). Esto le permite emular comportamientos típicos en una sola línea:
+
+cameraView . mapGesture ( Gesto . PINCH , GestureAction . ZOOM ); // ¡ Pellizca para hacer zoom! 
+cameraView . mapGesture ( Gesture . TAP , GestureAction . FOCUS_WITH_MARKER ); // ¡ Toca para enfocar! 
+cameraView . mapGesture ( Gesture . LONG_TAP , GestureAction . CAPTURE ); // ¡Toque largo para disparar!
+Simple como eso. Vienen más gestos. Hay dos cosas a tener en cuenta:
+
+No todos los mapas son válidos. Por ejemplo, no puede controlar el zoom con toques largos o comenzar a enfocar pellizcando.
+Es posible que el sensor no admita algunas acciones. Consulte CameraOptionspara saber qué es legítimo y qué no.
+Gesto (XML)	Descripción	Puede asignarse a
+PINCH( cameraGesturePinch)	Gesto de pellizco, normalmente asignado al control de zoom.	zoom exposureCorrection none
+TAP( cameraGestureTap)	Gesto de un solo toque, normalmente asignado al control de enfoque.	focus focusWithMarker capture none
+LONG_TAP( cameraGestureLongTap)	Gesto de toque largo.	focus focusWithMarker capture none
+SCROLL_HORIZONTAL( cameraGestureScrollHorizontal)	Gesto de movimiento horizontal.	zoom exposureCorrection none
+SCROLL_VERTICAL( cameraGestureScrollVertical)	Gesto de movimiento vertical.	zoom exposureCorrection none
+Comportamiento de dimensionamiento
+Tamaño de vista previa
+CameraViewtiene un comportamiento de medición inteligente que le permitirá hacer lo que quiera con unas pocas banderas. La medición se controla simplemente mediante atributos layout_widthy layout_height, con este significado:
+
+WRAP_CONTENT : intente ampliar esta dimensión para respetar la relación de aspecto de la vista previa.
+MATCH_PARENT : rellene esta dimensión, incluso si esto significa ignorar la relación de aspecto.
+Valores fijos (ej. 500dp): Respetar esta dimensión.
+Puede tener vistas previas de todos los tamaños, no solo los ajustes preestablecidos admitidos. Hagas lo que hagas, la vista previa nunca se distorsionará.
+
+Centro adentro
+Puede emular un comportamiento de centro interior (como el tipo de ImageViewescala) estableciendo ambas dimensiones en wrap_content. La cámara obtendrá el tamaño más grande posible que se ajuste a sus límites, al igual que sucede con las vistas de imágenes.
+
+< com .otaliastudios.cameraview.CameraView
+     android : layout_width = " wrap_content "
+     android : layout_height = " wrap_content " />
+Esto significa que toda la vista previa es visible y la salida de la imagen coincide con lo que estaba visible durante la captura.
+
+Recorte central
+Puede emular un comportamiento de cultivo central estableciendo ambas dimensiones en valores fijos o en MATCH_PARENT. La vista de la cámara llenará el rect. Si sus dimensiones no coinciden con la relación de aspecto de la superficie de vista previa interna, la superficie se recortará para llenar la vista, como android:scaleType="centerCrop"en un archivo ImageView.
+
+< com .otaliastudios.cameraview.CameraView
+     android : layout_width = " match_parent "
+     android : layout_height = " match_parent " />
+Esto significa que parte de la vista previa está oculta y la salida de la imagen contendrá partes de la escena que no eran visibles durante la captura. Si esto es un problema, consulte cameraCropOutput .
+
+Tamaño de foto
+Además de esto, puede controlar el tamaño real de la imagen de salida, entre la lista de tamaños disponibles. Es el tamaño de la imagen JPEG final. Esto se puede lograr directamente a través de XML o usando la SizeSelectorclase:
+
+cameraView . setPictureSize ( new  SizeSelector () {
+     @Override 
+    public  List < Size >  select ( List < Size >  source ) {
+         // Recibe una lista de tamaños disponibles. 
+        // Debe devolver una lista de tamaños aceptables.
+    }
+});
+En la práctica, esto es mucho más fácil usando atributos XML o aprovechando las SizeSelectorsutilidades:
+
+Restricción	Atributo XML	SizeSelector
+min. anchura	app:cameraPictureSizeMinWidth="100"	SizeSelectors.minWidth(100)
+min. altura	app:cameraPictureSizeMinHeight="100"	SizeSelectors.minHeight(100)
+máx. anchura	app:cameraPictureSizeMaxWidth="3000"	SizeSelectors.maxWidth(3000)
+máx. altura	app:cameraPictureSizeMaxHeight="3000"	SizeSelectors.maxHeight(3000)
+min. zona	app:cameraPictureSizeMinArea="1000000"	SizeSelectors.minArea(1000000)
+máx. zona	app:cameraPictureSizeMaxArea="5000000"	SizeSelectors.maxArea(5000000)
+relación de aspecto	app:cameraPictureSizeAspectRatio="1:1"	SizeSelectors.aspectRatio(AspectRatio.of(1,1), 0)
+pequeñísimo	app:cameraPictureSizeSmallest="true"	SizeSelectors.smallest()
+más grande ( predeterminado )	app:cameraPictureSizeBiggest="true"	SizeSelectors.biggest()
+Si declara más de una restricción XML, el selector resultante intentará coincidir con todas las restricciones. Tenga cuidado: es muy probable que la aplicación de muchas restricciones dé resultados vacíos.
+
+Utilidades SizeSelectors
+Para mayor versatilidad, o para abordar problemas de selección con múltiples restricciones, le recomendamos que utilice SizeSelectorsutilidades que le permitirán fusionar diferentes selectores.
+
+Este selector intentará encontrar tamaños cuadrados mayores a 1000x2000. Si no se encuentra ninguno, se reduce a solo tamaños cuadrados:
+
+SizeSelector width =  SizeSelectors . minWidth ( 1000 );
+SizeSelector height =  SizeSelectors . minWidth ( 2000 );
+SizeSelector dimensiones =  SizeSelectors . y (ancho, alto); // Coincide con tamaños superiores a 1000x2000. 
+Relación de SizeSelector =  SizeSelectors . AspectRatio ( AspectRatio . de ( 1 , 1 ), 0 ); // Combina con tamaños 1: 1.
+
+Resultado de SizeSelector =  SizeSelectors . o (
+     SizeSelectors . y (relación, dimensiones), // Intenta igualar la 
+    relación de ambas restricciones , // Si no se encuentra ninguna, al menos intenta hacer coincidir la relación de aspecto 
+    SizeSelectors . Big () // Si no se encuentra ninguna, toma la más grande
+);
+la cámara . setPictureSize (resultado);
+Controles de la cámara
+La mayoría de los parámetros de la cámara se pueden controlar mediante atributos XML o métodos vinculados.
+
+< com .otaliastudios.cameraview.CameraView
+     android : id = " @ + id / camera "
+     android : layout_width = " match_parent "
+     android : layout_height = " wrap_content "
+     android : keepScreenOn = " true "
+     app : cameraFacing = " back "
+     app : cameraFlash = aplicación " off "
+     : cameraGrid= " off "
+     aplicación : cameraSessionType = " imagen "
+     aplicación : cameraCropOutput = " false "  
+     aplicación : cameraJpegQuality = " 100 "
+     aplicación : cameraVideoQuality = " 480p "
+     aplicación : cameraVideoCodec = " deviceDefault "
+     aplicación : cameraWhiteBalance = " auto "
+     aplicación : cameraHdr =
+    aplicación " off " : cameraAudio = " on "
+     aplicación : cameraPlaySounds = " true "
+     aplicación : cameraVideoMaxSize = " 0 "
+     aplicación : cameraVideoMaxDuration = " 0 " />
+Atributo XML	Método	Valores	Valor por defecto
+cameraSessionType	setSessionType()	picture video	picture
+cameraFacing	setFacing()	back front	back
+cameraFlash	setFlash()	off on auto torch	off
+cameraGrid	setGrid()	off draw3x3 draw4x4 drawPhi	off
+cameraCropOutput	setCropOutput()	true false	false
+cameraJpegQuality	setJpegQuality()	0 < n <= 100	100
+cameraVideoQuality	setVideoQuality()	lowest highest maxQvga max480p max720p max1080p max2160p	max480p
+cameraVideoCodec	setVideoCodec()	deviceDefault h263 h264	deviceDefault
+cameraWhiteBalance	setWhiteBalance()	auto incandescent fluorescent daylight cloudy	auto
+cameraHdr	setHdr()	off on	off
+cameraAudio	setAudio()	off on	on
+cameraPlaySounds	setPlaySounds()	true false	true
+cameraVideoMaxSize	setVideoMaxSize()	número	0
+cameraVideoMaxDuration	setVideoMaxDuration()	número	0
+cameraSessionType
+Qué capturar: imagen o video. Esto tiene un par de consecuencias:
+
+Tamaño: el tamaño de la imagen y la vista previa se eligen entre los tamaños de imagen o video disponibles, según la bandera. El tamaño de la imagen se elige de acuerdo con el selector de tamaño dado . Cuando video, además, intentamos igualar la videoQualityrelación de aspecto.
+Captura de imágenes: debido al comportamiento del tamaño, la captura de imágenes en el videomodo puede generar resultados inconsistentes. En este caso, se recomienda utilizar captureSnapshoten su lugar, que capturará fotogramas de vista previa. Esto es rápido y, por lo tanto, funciona bien con sensores de cámara más lentos.
+Captura de imágenes: mientras graba un video, la captura de imágenes puede funcionar, pero no está garantizada (depende del dispositivo)
+Comportamiento del permiso: al solicitar una videosesión se solicitará el permiso de grabación de audio. Si es necesario, debe agregar el permiso de audio a su manifiesto o la aplicación fallará.
+cameraView . setSessionType ( SessionType . IMAGEN );
+cameraView . setSessionType ( SessionType . VIDEO );
+camara
+Qué cámara usar, ya sea hacia atrás o hacia adelante.
+
+cameraView . setFacing ( Frente . ATRÁS );
+cameraView . setFacing ( Frente . FRENTE );
+Flash de la cámara
+Modo de flash, ya sea apagado, encendido, automático o linterna .
+
+cameraView . setFlash ( Flash . APAGADO );
+cameraView . setFlash ( Flash . ENCENDIDO );
+cameraView . setFlash ( Flash . AUTO );
+cameraView . setFlash ( Flash . ANTORCHA );
+cameraGrid
+Le permite dibujar cuadrículas sobre la vista previa de la cámara. Los valores admitidos son off, draw3x3y draw4x4 para cuadrículas regulares, y drawPhipara una cuadrícula basada en la constante de proporción áurea, que se utilizan a menudo en fotografía.
+
+cameraView . setGrid ( cuadrícula . OFF );
+cameraView . setGrid ( Cuadrícula . DRAW_3X3 );
+cameraView . setGrid ( Cuadrícula . DRAW_4X4 );
+cameraView . setGrid ( Cuadrícula . DRAW_PHI );
+cameraCropOutput
+Si la imagen de salida debe recortarse para ajustarse a la relación de aspecto de la superficie de vista previa. Esto puede garantizar la coherencia entre lo que ve el usuario y el resultado final, si fijó las dimensiones de la vista de la cámara. Esto no admite videos.
+
+cameraJpegQuality
+Establece la calidad JPEG de las imágenes.
+
+cameraView . setJpegQuality ( 100 );
+cameraView . setJpegQuality ( 50 );
+cameraVideoQuality
+Establece la calidad de video deseada.
+
+cameraView . setVideoQuality ( VideoQuality . MÁS BAJO );
+cameraView . setVideoQuality ( VideoQuality . HIGHEST );
+cameraView . setVideoQuality ( VideoQuality . MAX_QVGA );
+cameraView . setVideoQuality ( VideoQuality . MAX_480P );
+cameraView . setVideoQuality ( VideoQuality . MAX_720P );
+cameraView . setVideoQuality ( VideoQuality . MAX_1080P );
+cameraView . setVideoQuality ( VideoQuality . MAX_2160P );
+cameraVideoCodec
+Configura el codificador para grabaciones de video.
+
+cameraView . setVideoCodec ( VideoCodec . DEVICE_DEFAULT );
+cameraView . setVideoCodec ( VideoCodec . H_263 );
+cameraView . setVideoCodec ( VideoCodec . H_264 );
+cameraWhiteBalance
+Establece el balance de blancos deseado para la sesión actual.
+
+cameraView . setWhiteBalance ( WhiteBalance . AUTO );
+cameraView . setWhiteBalance ( WhiteBalance . INCANDESCENTE );
+cameraView . setWhiteBalance ( WhiteBalance . FLUORESCENTE );
+cameraView . setWhiteBalance ( WhiteBalance . LUZ DEL DÍA );
+cameraView . setWhiteBalance ( WhiteBalance . NUBLADO );
+cameraHdr
+Activa o desactiva las capturas HDR.
+
+cameraView . setHdr ( Hdr . APAGADO );
+cameraView . setHdr ( Hdr . ENCENDIDO );
+cámaraAudio
+Activa o desactiva la transmisión de audio mientras graba videos.
+
+cameraView . setAudio ( Audio . APAGADO );
+cameraView . setAudio ( Audio . ENCENDIDO );
+cameraPlaySounds
+Controla si debemos reproducir sonidos proporcionados por la plataforma durante ciertos eventos (clic del obturador, enfoque completado). Tenga en cuenta que:
+
+en API <16, este indicador siempre se establece en false
+el motor Camera1 siempre reproducirá sonidos de obturador independientemente de esta bandera
+cameraView . setPlaySounds ( verdadero );
+cameraView . setPlaySounds ( falso );
+cameraVideoMaxSize
+Define el tamaño máximo en bytes para archivos de video grabados. Una vez que se alcanza este tamaño, la grabación se detendrá automáticamente. El tamaño predeterminado es ilimitado. Utilice 0 o negativos para desactivar.
+
+cameraView . setVideoMaxSize ( 100000 );
+cameraView . setVideoMaxSize ( 0 ); // Deshabilitar
+cameraVideoMaxDuration
+Define la duración máxima en milisegundos para las grabaciones de video. Una vez que se alcanza esta duración, la grabación se detendrá automáticamente. Por defecto, la duración es ilimitada. Utilice 0 o negativos para desactivar.
+
+cameraView . setVideoMaxDuration ( 100000 );
+cameraView . setVideoMaxDuration ( 0 ); // Deshabilitar
+Procesamiento de cuadros
+Admitimos procesadores de cuadros que recibirán datos del flujo de vista previa de la cámara:
+
+cameraView . addFrameProcessor ( new  FrameProcessor () {
+     @Override 
+    @WorkerThread 
+    public  void  process ( Frame  frame ) {
+         byte [] data = frame . getData ();
+         int rotación = frame . getRotation ();
+         tiempo largo = frame . getTime ();
+         Tamaño del tamaño = marco . getSize ();
+         formato int = marco. getFormat ();
+        // Proceso ...
+    }
+}
+Para su comodidad, el FrameProcessormétodo se ejecuta en un subproceso en segundo plano para que pueda realizar su trabajo de forma sincrónica. Una vez que el método de proceso regrese, internamente reutilizaremos la Frameinstancia y le aplicaremos nuevos datos. Entonces:
+
+puedes hacer tu trabajo sincrónicamente en el process()método
+si debe mantener la Frameinstancia por más tiempo, use frame = frame.freeze()para obtener una instancia congelada que no se verá afectada
+API de marco	Tipo	Descripción
+frame.getData()	byte[]	El fotograma de vista previa actual, en su orientación original.
+frame.getTime()	long	La marca de tiempo de la vista previa, en System.currentTimeMillis()referencia.
+frame.getRotation()	int	La rotación que se debe aplicar a la matriz de bytes para ver lo que ve el usuario.
+frame.getSize()	Size	El tamaño del marco, antes de que se aplique cualquier rotación, para acceder a los datos.
+frame.getFormat()	int	El marco ImageFormat. Esto siempre será ImageFormat.NV21por ahora.
+frame.freeze()	Frame	Clona este marco y lo hace inmutable. Puede ser caro porque requiere copiar la matriz de bytes.
+frame.release()	-	Elimina el contenido de este marco. Debe utilizarse en fotogramas congelados para liberar memoria.
+Otras API
+Se proporcionan otras API no mencionadas anteriormente, y están bien documentadas y comentadas en el código.
+
+Método	Descripción
+isStarted()	Devuelve verdadero si start()se llamó con éxito. Esto no significa que la cámara esté abierta o que muestre una vista previa.
+mapGesture(Gesture, GestureAction)	Asigna un determinado gesto a una determinada acción. No opera si la acción no es compatible.
+getGestureAction(Gesture)	Devuelve la acción actualmente asignada al gesto dado.
+clearGesture(Gesture)	Borra cualquier acción asignada al gesto dado.
+getCameraOptions()	Si se inició la cámara, devuelve un objeto no nulo con información sobre lo que se admite.
+getExtraProperties()	Si se inició la cámara, devuelve un objeto no nulo con información adicional sobre el sensor de la cámara. No es muy útil por el momento.
+setZoom(float), getZoom()	Establece un valor de zoom, donde 0 significa que la cámara se alejó y 1 significa que se acercó el zoom. No hay operación si el zoom no es compatible o la cámara no está iniciada.
+setExposureCorrection(float), getExposureCorrection()	Establece el valor EV de compensación de exposición, en paradas de cámara. No operativo si esto no es compatible. Debe estar entre los límites devueltos por CameraOptions.
+toggleFacing()	Alterna el valor de enfrentamiento entre Facing.FRONTy Facing.BACK.
+setLocation(Location)	Configura los datos de ubicación que se agregarán a los metadatos de imágenes / videos.
+setLocation(double, double)	Establece la latitud y la longitud que se agregarán a los metadatos de la imagen / video.
+getLocation()	Recupera datos de ubicación previamente aplicados con setLocation ().
+startAutoFocus(float, float)	Inicia un proceso de enfoque automático en las coordenadas dadas, con respecto a las dimensiones de la vista.
+getPreviewSize()	Devuelve el tamaño de la superficie de vista previa. Si CameraView no estaba restringido en su fase de diseño (por ejemplo, lo estaba wrap_content), esto devolverá la misma relación de aspecto de CameraView.
+getSnapshotSize()	Devuelve getPreviewSize(), ya que una instantánea es un marco de vista previa.
+getPictureSize()	Devuelve el tamaño de la imagen de salida. La relación de aspecto es consistente con getPreviewSize().
+Toma también un vistazo a los métodos públicos en CameraUtils, CameraOptions, ExtraProperties.
+
+Comportamiento de permisos
+CameraView necesita dos permisos:
+
+android.permission.CAMERA : requerido para capturar imágenes y videos
+android.permission.RECORD_AUDIO: requerido para capturar videos con Audio.ON(el predeterminado)
+Declaración
+El archivo de manifiesto de la biblioteca declara el android.permission.CAMERApermiso, pero no el de audio. Esto significa que:
+
+Si desea grabar videos con Audio.ON(el predeterminado), también debe agregar android.permission.RECORD_AUDIOa los permisos requeridos
+< usa-permiso  android : name = " android.permission.RECORD_AUDIO " />
+Si desea que su aplicación se instale solo en dispositivos que tienen una cámara, debe agregar:
+< uses-feature 
+    android : name = " android.hardware.camera "
+     android : required = " true " />
+Si no solicita esta función, puede usarla CameraUtils.hasCameras()para detectar si el dispositivo actual tiene cámaras y luego iniciar la vista de cámara.
+
+Manejo
+En Marshmallow +, el usuario debe aprobar explícitamente nuestros permisos. Usted puede
+
+manejar los permisos usted mismo y luego llamar cameraView.start()una vez que los haya adquirido
+o llamar de cameraView.start()todos modos: CameraViewpresentará una solicitud de permiso al usuario en función de si son necesarios o no con la configuración actual.
+En el segundo caso, debe reiniciar la cámara si tiene una respuesta exitosa de onRequestPermissionResults().
+
+Inicio sesión
+CameraViewregistrará muchos eventos interesantes relacionados con el ciclo de vida de la cámara. Estos son importantes para identificar errores. El registrador predeterminado simplemente usará los Logmétodos de Android para publicar en logcat.
+
+Puede conectar y desconectar registradores externos usando CameraLogger.registerLogger():
+
+CameraLogger . registerLogger ( nuevo  registrador () {
+     @ Override 
+    pública  nula  registro ( @LogLevel  int  nivel , Cadena  etiqueta , cadena  de mensajes , @Nullable  Throwable  throwable ) {
+         // Por ejemplo ... 
+        Crashlytics . log (mensaje);
+    }
+});
+Asegúrese de habilitar el registrador usando CameraLogger.setLogLevel(@LogLevel int). El valor predeterminado solo registrará eventos de error.
+
+Problemas específicos del dispositivo
+Hay un par de problemas conocidos si está trabajando con ciertos dispositivos. El emulador es uno de los más tramposos en este sentido.
+
+Dispositivos o actividades con la aceleración de hardware desactivada: este puede ser el caso de los emuladores. En este caso usaremos SurfaceView como nuestro proveedor de superficie. Eso es intrínsecamente defectuoso y no puede lidiar con todo lo que queremos hacer aquí (cambios en el diseño del tiempo de ejecución, escalado, etc.). Entonces, nada que hacer en este caso.
+Dispositivos sin soporte para MediaRecorder: el emulador no lo admite, oficialmente. Esto significa que la grabación de video / audio tiene fallas. Una vez más, no es culpa nuestra.
+Mapa vial
+Esto es lo que se hizo desde que se bifurcó la biblioteca. He mantenido la estructura original, pero prácticamente se cambió todo el código.
+
+una gran cantidad de errores graves corregidos
+soporte de orientación decente tanto para imágenes como para videos
+menos dependencias
+Soporte EXIF
+soporte real de tocar para enfocar
+soporte de pellizcar para hacer zoom
+API más simples, documentos y código muy comentado
+nueva captureSnapshotAPI
+nuevas setLocationy setWhiteBalanceAPI
+nuevas setGridAPI, para dibujar cuadrículas de 3x3, 4x4 o proporción áurea
+opción para pasar una Fileal grabar un video
+otras adiciones menores de API
+reemplazando cosas de métodos y permisos con más simples sessionType
+comportamiento inteligente de medición y dimensionamiento, reemplazando errores adjustViewBounds
+medir CameraViewcomo recorte central o centro interior
+agregar varios CameraListeners para eventos
+soporte de marco de gestos, mapear gestos a controles de cámara
+apoyo gesto pellizcar
+soporte para gestos de toque y toque largo
+soporte de gestos de desplazamiento
+Soporte de MediaActionSound
+Controles HDR
+controles de corrección de exposición y zoom
+Pruebas
+CameraLogger API para registros e informes de errores
+Mejor subproceso, start () en subproceso de trabajo y devoluciones de llamada en la interfaz de usuario
+Soporte de procesador de cuadros
+inyectar registradores externos
+manejo de errores
+selectores de tamaño de captura
+Estas son todavía cosas que deben hacerse, fuera de mi mente:
+
+ Camera2 integración
+ Animar líneas de cuadrícula similares a la aplicación de cámara de stock
+ agregue onRequestPermissionResults para una fácil devolución de llamada de permiso
+ cobertura de código decente
+Contribuir y licencias
+El proyecto original que sirvió como punto de partida para esta biblioteca, CameraKit-Android , tiene la licencia MIT . El trabajo adicional ahora también está autorizado bajo la licencia MIT .
+
+Le invitamos a contribuir con sugerencias o solicitudes de extracción, esto está en desarrollo activo. Para contactarme, envíe un correo electrónico.
