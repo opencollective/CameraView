@@ -3,7 +3,9 @@ package com.otaliastudios.cameraview;
 
 import android.graphics.Bitmap;
 import android.graphics.PointF;
-import android.media.MediaRecorder;
+import android.hardware.Camera;
+import android.os.Build;
+import android.os.Handler;
 import android.support.test.filters.MediumTest;
 import android.support.test.rule.ActivityTestRule;
 import android.support.test.runner.AndroidJUnit4;
@@ -20,8 +22,13 @@ import java.io.File;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import static org.mockito.Mockito.*;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
 
 
 @RunWith(AndroidJUnit4.class)
@@ -116,9 +123,9 @@ public class IntegrationTest extends BaseTest {
         doEndTask(video, true).when(listener).onVideoTaken(any(File.class));
         Boolean result = video.await(8000);
         if (expectSuccess) {
-            assertNotNull("Can take video", result);
+            assertNotNull("Should end video", result);
         } else {
-            assertNull("Should not take video", result);
+            assertNull("Should not end video", result);
         }
     }
 
@@ -353,6 +360,25 @@ public class IntegrationTest extends BaseTest {
         // This also ensures there are no crashes when attaching it to camera parameters.
     }
 
+    @Test
+    public void testSetPlaySounds() {
+        controller.mPlaySoundsTask.listen();
+        boolean oldValue = camera.getPlaySounds();
+        boolean newValue = !oldValue;
+        camera.setPlaySounds(newValue);
+        controller.mPlaySoundsTask.await(300);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            Camera.CameraInfo info = new Camera.CameraInfo();
+            Camera.getCameraInfo(camera.getCameraId(), info);
+            if (info.canDisableShutterSound) {
+                assertEquals(newValue, camera.getPlaySounds());
+            }
+        } else {
+            assertEquals(oldValue, camera.getPlaySounds());
+        }
+    }
+
     //endregion
 
     //region testSetVideoQuality
@@ -429,6 +455,24 @@ public class IntegrationTest extends BaseTest {
         waitForOpen(true);
         camera.stopCapturingVideo();
         waitForVideoEnd(false);
+    }
+
+    @Test
+    public void testEndVideo_withMaxSize() {
+        camera.setSessionType(SessionType.VIDEO);
+        camera.setVideoMaxSize(500*1000); // 0.5 mb
+        waitForOpen(true);
+        waitForVideoStart();
+        waitForVideoEnd(true);
+    }
+
+    @Test
+    public void testEndVideo_withMaxDuration() {
+        camera.setSessionType(SessionType.VIDEO);
+        camera.setVideoMaxDuration(4000);
+        waitForOpen(true);
+        waitForVideoStart();
+        waitForVideoEnd(true);
     }
 
     //endregion

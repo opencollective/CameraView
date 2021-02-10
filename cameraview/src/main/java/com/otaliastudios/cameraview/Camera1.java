@@ -1,5 +1,6 @@
 package com.otaliastudios.cameraview;
 
+import android.annotation.TargetApi;
 import android.graphics.ImageFormat;
 import android.graphics.PointF;
 import android.graphics.Rect;
@@ -9,6 +10,7 @@ import android.hardware.Camera;
 import android.location.Location;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
+import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.annotation.WorkerThread;
@@ -36,8 +38,10 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
             if (!isCameraAvailable()) return;
             mCamera.cancelAutoFocus();
             Camera.Parameters params = mCamera.getParameters();
-            params.setFocusAreas(null);
-            params.setMeteringAreas(null);
+            int maxAF = params.getMaxNumFocusAreas();
+            int maxAE = params.getMaxNumMeteringAreas();
+            if (maxAF > 0) params.setFocusAreas(null);
+            if (maxAE > 0) params.setMeteringAreas(null);
             applyDefaultFocus(params); // Revert to internal focus.
             mCamera.setParameters(params);
         }
@@ -178,6 +182,7 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
             mergeLocation(params, null);
             mergeWhiteBalance(params, WhiteBalance.DEFAULT);
             mergeHdr(params, Hdr.DEFAULT);
+            mergePlaySound(mPlaySounds);
             params.setRecordingHint(mSessionType == SessionType.VIDEO);
             mCamera.setParameters(params);
 
@@ -225,6 +230,8 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
         mPreviewSize = null;
         mPictureSize = null;
         mIsBound = false;
+        mIsCapturingImage = false;
+        mIsCapturingVideo = false;
         LOG.w("onStop:", "Clean up.", "Returning.");
         if (error != null) throw new CameraException(error);
     }
@@ -363,6 +370,23 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
             return true;
         }
         mHdr = oldHdr;
+        return false;
+    }
+
+    @TargetApi(17)
+    private boolean mergePlaySound(boolean oldPlaySound) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            Camera.CameraInfo info = new Camera.CameraInfo();
+            Camera.getCameraInfo(mCameraId, info);
+            if (info.canDisableShutterSound) {
+                mCamera.enableShutterSound(mPlaySounds);
+                return true;
+            }
+        }
+        if (mPlaySounds) {
+            return true;
+        }
+        mPlaySounds = oldPlaySound;
         return false;
     }
 
@@ -572,15 +596,19 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
     private boolean isCameraAvailable() {
         switch (mState) {
             // If we are stopped, don't.
-            case STATE_STOPPED: return false;
+            case STATE_STOPPED:
+                return false;
             // If we are going to be closed, don't act on camera.
             // Even if mCamera != null, it might have been released.
-            case STATE_STOPPING: return false;
+            case STATE_STOPPING:
+                return false;
             // If we are started, mCamera should never be null.
-            case STATE_STARTED: return true;
+            case STATE_STARTED:
+                return true;
             // If we are starting, theoretically we could act.
             // Just check that camera is available.
-            case STATE_STARTING: return mCamera != null;
+            case STATE_STARTING:
+                return mCamera != null;
         }
         return false;
     }
@@ -660,7 +688,7 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
         mMediaRecorder.setOutputFormat(profile.fileFormat);
         mMediaRecorder.setVideoFrameRate(profile.videoFrameRate);
         mMediaRecorder.setVideoSize(profile.videoFrameWidth, profile.videoFrameHeight);
-        mMediaRecorder.setVideoEncoder(profile.videoCodec);
+        mMediaRecorder.setVideoEncoder(mMapper.map(mVideoCodec));
         mMediaRecorder.setVideoEncodingBitRate(profile.videoBitRate);
         if (mAudio == Audio.ON) {
             mMediaRecorder.setAudioChannels(profile.audioChannels);
@@ -670,12 +698,28 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
         }
 
         if (mLocation != null) {
-            mMediaRecorder.setLocation((float) mLocation.getLatitude(),
+            mMediaRecorder.setLocation(
+                    (float) mLocation.getLatitude(),
                     (float) mLocation.getLongitude());
         }
 
         mMediaRecorder.setOutputFile(mVideoFile.getAbsolutePath());
         mMediaRecorder.setOrientationHint(computeSensorToOutputOffset());
+
+        mMediaRecorder.setMaxFileSize(mVideoMaxSize);
+        mMediaRecorder.setMaxDuration(mVideoMaxDuration);
+
+        mMediaRecorder.setOnInfoListener(new MediaRecorder.OnInfoListener() {
+            @Override
+            public void onInfo(MediaRecorder mediaRecorder, int what, int extra) {
+                switch (what) {
+                    case MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED:
+                    case MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED:
+                        endVideoImmediately();
+                        break;
+                }
+            }
+        });
         // Not needed. mMediaRecorder.setPreviewDisplay(mPreview.getSurface());
     }
 
@@ -833,4 +877,20 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
         LOG.i("size:", "sizesFromList:", result);
         return result;
     }
+
+    @Override
+    void setPlaySounds(boolean playSounds) {
+        final boolean old = mPlaySounds;
+        mPlaySounds = playSounds;
+        schedule(mPlaySoundsTask, true, new Runnable() {
+            @Override
+            public void run() {
+                mergePlaySound(old);
+            }
+        });
+    }
+
+    // -----------------
+    // Additional helper info
 }
+

@@ -39,12 +39,14 @@ abstract class CameraController implements
     protected Flash mFlash;
     protected WhiteBalance mWhiteBalance;
     protected VideoQuality mVideoQuality;
+    protected VideoCodec mVideoCodec;
     protected SessionType mSessionType;
     protected Hdr mHdr;
     protected Location mLocation;
     protected Audio mAudio;
     protected float mZoomValue;
     protected float mExposureCorrectionValue;
+    protected boolean mPlaySounds;
 
     protected int mCameraId;
     protected ExtraProperties mExtraProperties;
@@ -54,6 +56,8 @@ abstract class CameraController implements
     protected SizeSelector mPictureSizeSelector;
     protected MediaRecorder mMediaRecorder;
     protected File mVideoFile;
+    protected long mVideoMaxSize;
+    protected int mVideoMaxDuration;
     protected Size mPictureSize;
     protected Size mPreviewSize;
     protected int mPreviewFormat;
@@ -76,6 +80,7 @@ abstract class CameraController implements
     Task<Void> mLocationTask = new Task<>();
     Task<Void> mVideoQualityTask = new Task<>();
     Task<Void> mStartVideoTask = new Task<>();
+    Task<Void> mPlaySoundsTask = new Task<>();
 
     CameraController(CameraView.CameraCallbacks callback) {
         mCameraCallbacks = callback;
@@ -273,6 +278,19 @@ abstract class CameraController implements
         mPictureSizeSelector = selector;
     }
 
+    final void setVideoMaxSize(long videoMaxSizeBytes) {
+        mVideoMaxSize = videoMaxSizeBytes;
+    }
+
+    final void setVideoMaxDuration(int videoMaxDurationMillis) {
+        mVideoMaxDuration = videoMaxDurationMillis;
+    }
+
+    final void setVideoCodec(VideoCodec codec) {
+        mVideoCodec = codec;
+    }
+
+
     //endregion
 
     //region Abstract setters and APIs
@@ -317,6 +335,8 @@ abstract class CameraController implements
 
     abstract void startAutoFocus(@Nullable Gesture gesture, PointF point);
 
+    abstract void setPlaySounds(boolean playSounds);
+
     //endregion
 
     //region final getters
@@ -345,6 +365,18 @@ abstract class CameraController implements
 
     final VideoQuality getVideoQuality() {
         return mVideoQuality;
+    }
+
+    final VideoCodec getVideoCodec() {
+        return mVideoCodec;
+    }
+
+    final long getVideoMaxSize() {
+        return mVideoMaxSize;
+    }
+
+    final int getVideoMaxDuration() {
+        return mVideoMaxDuration;
     }
 
     final SessionType getSessionType() {
@@ -381,6 +413,10 @@ abstract class CameraController implements
 
     final Size getPreviewSize() {
         return mPreviewSize;
+    }
+
+    final boolean isCapturingVideo() {
+        return mIsCapturingVideo;
     }
 
     //endregion
@@ -481,7 +517,7 @@ abstract class CameraController implements
                 SizeSelectors.minWidth(targetMinSize.getWidth()));
         SizeSelector matchAll = SizeSelectors.or(
                 SizeSelectors.and(matchRatio, matchSize),
-                matchRatio, // If couldn't match both, match ratio.
+                SizeSelectors.and(matchRatio, SizeSelectors.biggest()), // If couldn't match both, match ratio and biggest.
                 SizeSelectors.biggest() // If couldn't match any, take the biggest.
         );
         Size result = matchAll.select(previewSizes).get(0);
