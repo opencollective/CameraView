@@ -93,9 +93,12 @@ public class CameraViewTest extends BaseTest {
         assertEquals(cameraView.getHdr(), Hdr.DEFAULT);
         assertEquals(cameraView.getAudio(), Audio.DEFAULT);
         assertEquals(cameraView.getVideoQuality(), VideoQuality.DEFAULT);
+        assertEquals(cameraView.getVideoCodec(), VideoCodec.DEFAULT);
         assertEquals(cameraView.getLocation(), null);
         assertEquals(cameraView.getExposureCorrection(), 0f, 0f);
         assertEquals(cameraView.getZoom(), 0f, 0f);
+        assertEquals(cameraView.getVideoMaxDuration(), 0, 0);
+        assertEquals(cameraView.getVideoMaxSize(), 0, 0);
 
         // Self managed
         assertEquals(cameraView.getPlaySounds(), CameraView.DEFAULT_PLAY_SOUNDS);
@@ -559,12 +562,32 @@ public class CameraViewTest extends BaseTest {
     }
 
     @Test
+    public void testVideoCodec() {
+        cameraView.set(VideoCodec.H_263);
+        assertEquals(cameraView.getVideoCodec(), VideoCodec.H_263);
+        cameraView.set(VideoCodec.H_264);
+        assertEquals(cameraView.getVideoCodec(), VideoCodec.H_264);
+    }
+
+    @Test
     public void testPictureSizeSelector() {
         SizeSelector source = SizeSelectors.minHeight(50);
         cameraView.setPictureSize(source);
         SizeSelector result = mockController.getPictureSizeSelector();
         assertNotNull(result);
         assertEquals(result, source);
+    }
+
+    @Test
+    public void testVideoMaxSize() {
+        cameraView.setVideoMaxSize(5000);
+        assertEquals(cameraView.getVideoMaxSize(), 5000);
+    }
+
+    @Test
+    public void testVideoMaxDuration() {
+        cameraView.setVideoMaxDuration(5000);
+        assertEquals(cameraView.getVideoMaxDuration(), 5000);
     }
 
     //endregion
