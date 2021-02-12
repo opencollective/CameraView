@@ -36,7 +36,7 @@ class Camera2 extends CameraController {
     }
 
     @Override
-    void setSessionType(SessionType sessionType) {
+    void setMode(Mode mode) {
 
     }
 
@@ -81,27 +81,22 @@ class Camera2 extends CameraController {
     }
 
     @Override
-    void setVideoQuality(VideoQuality videoQuality) {
+    void takePicture() {
 
     }
 
     @Override
-    void capturePicture() {
+    void takePictureSnapshot(AspectRatio viewAspectRatio) {
 
     }
 
     @Override
-    void captureSnapshot() {
+    void takeVideo(@NonNull File file) {
 
     }
 
     @Override
-    void startVideo(@NonNull File file) {
-
-    }
-
-    @Override
-    void endVideo() {
+    void stopVideo() {
 
     }
 

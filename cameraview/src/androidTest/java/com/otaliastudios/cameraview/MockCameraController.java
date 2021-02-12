@@ -67,13 +67,8 @@ public class MockCameraController extends CameraController {
     }
 
     @Override
-    void setVideoQuality(VideoQuality videoQuality) {
-        mVideoQuality = videoQuality;
-    }
-
-    @Override
-    void setSessionType(SessionType sessionType) {
-        mSessionType = sessionType;
+    void setMode(Mode mode) {
+        mMode = mode;
     }
 
     @Override
@@ -92,20 +87,20 @@ public class MockCameraController extends CameraController {
     }
 
     @Override
-    void capturePicture() {
+    void takePicture() {
         mPictureCaptured = true;
     }
 
     @Override
-    void captureSnapshot() {
+    void takePictureSnapshot(AspectRatio viewAspectRatio) {
     }
 
     @Override
-    void startVideo(@NonNull File file) {
+    void takeVideo(@NonNull File file) {
     }
 
     @Override
-    void endVideo() {
+    void stopVideo() {
     }
 
     @Override

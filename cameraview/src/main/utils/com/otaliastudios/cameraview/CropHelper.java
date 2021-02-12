@@ -1,37 +1,18 @@
 package com.otaliastudios.cameraview;
 
-import android.graphics.Bitmap;
 import android.graphics.Rect;
-import android.graphics.YuvImage;
-
-import java.io.ByteArrayOutputStream;
 
 class CropHelper {
 
+    // It's important that size and aspect ratio belong to the same reference.
+    static Rect computeCrop(Size currentSize, AspectRatio targetRatio) {
+        int currentWidth = currentSize.getWidth();
+        int currentHeight = currentSize.getHeight();
+        if (targetRatio.matches(currentSize)) {
+            return new Rect(0, 0, currentWidth, currentHeight);
+        }
 
-    static byte[] cropToJpeg(YuvImage yuv, AspectRatio targetRatio, int jpegCompression) {
-        Rect crop = computeCrop(yuv.getWidth(), yuv.getHeight(), targetRatio);
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        yuv.compressToJpeg(crop, jpegCompression, out);
-        return out.toByteArray();
-    }
-
-
-    // This reads a rotated Bitmap thanks to CameraUtils. Then crops and returns a byte array.
-    // In doing so, EXIF data is deleted.
-    static byte[] cropToJpeg(byte[] jpeg, AspectRatio targetRatio, int jpegCompression) {
-
-        Bitmap image = CameraUtils.decodeBitmap(jpeg, Integer.MAX_VALUE, Integer.MAX_VALUE);
-        Rect cropRect = computeCrop(image.getWidth(), image.getHeight(), targetRatio);
-        Bitmap crop = Bitmap.createBitmap(image, cropRect.left, cropRect.top, cropRect.width(), cropRect.height());
-        image.recycle();
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        crop.compress(Bitmap.CompressFormat.JPEG, jpegCompression, out);
-        crop.recycle();
-        return out.toByteArray();
-    }
-
-    private static Rect computeCrop(int currentWidth, int currentHeight, AspectRatio targetRatio) {
+        // They are not equal. Compute.
         AspectRatio currentRatio = AspectRatio.of(currentWidth, currentHeight);
         int x, y, width, height;
         if (currentRatio.toFloat() > targetRatio.toFloat()) {
@@ -48,3 +29,4 @@ class CropHelper {
         return new Rect(x, y, x + width, y + height);
     }
 }
+

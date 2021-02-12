@@ -14,8 +14,11 @@ import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.annotation.WorkerThread;
+import android.support.media.ExifInterface;
 import android.view.SurfaceHolder;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -49,7 +52,7 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
 
     Camera1(CameraView.CameraCallbacks callback) {
         super(callback);
-        mMapper = new Mapper.Mapper1();
+        mMapper = new Mapper1();
     }
 
     private void schedule(@Nullable final Task<Void> task, final boolean ensureAvailable, final Runnable action) {
@@ -129,7 +132,7 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
             throw new CameraException(e);
         }
 
-        mPictureSize = computePictureSize();
+        mCaptureSize = computeCaptureSize();
         mPreviewSize = computePreviewSize(sizesFromList(mCamera.getParameters().getSupportedPreviewSizes()));
         applySizesAndStartPreview("bindToSurface:");
         mIsBound = true;
@@ -140,16 +143,13 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
         LOG.i(log, "Dispatching onCameraPreviewSizeChanged.");
         mCameraCallbacks.onCameraPreviewSizeChanged();
 
-        boolean invertPreviewSizes = shouldFlipSizes();
-        mPreview.setDesiredSize(
-                invertPreviewSizes ? mPreviewSize.getHeight() : mPreviewSize.getWidth(),
-                invertPreviewSizes ? mPreviewSize.getWidth() : mPreviewSize.getHeight()
-        );
+        Size previewSize = getPreviewSize(REF_VIEW);
+        mPreview.setDesiredSize(previewSize.getWidth(), previewSize.getHeight());
 
         Camera.Parameters params = mCamera.getParameters();
         mPreviewFormat = params.getPreviewFormat();
         params.setPreviewSize(mPreviewSize.getWidth(), mPreviewSize.getHeight()); // <- not allowed during preview
-        params.setPictureSize(mPictureSize.getWidth(), mPictureSize.getHeight()); // <- allowed
+        params.setPictureSize(mCaptureSize.getWidth(), mCaptureSize.getHeight()); // <- allowed
         mCamera.setParameters(params);
 
         mCamera.setPreviewCallbackWithBuffer(null); // Release anything left
@@ -175,19 +175,18 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
             // Set parameters that might have been set before the camera was opened.
             LOG.i("onStart:", "Applying default parameters.");
             Camera.Parameters params = mCamera.getParameters();
-            mExtraProperties = new ExtraProperties(params);
-            mCameraOptions = new CameraOptions(params, shouldFlipSizes());
+            mCameraOptions = new CameraOptions(params, flip(REF_SENSOR, REF_VIEW));
             applyDefaultFocus(params);
             mergeFlash(params, Flash.DEFAULT);
             mergeLocation(params, null);
             mergeWhiteBalance(params, WhiteBalance.DEFAULT);
             mergeHdr(params, Hdr.DEFAULT);
             mergePlaySound(mPlaySounds);
-            params.setRecordingHint(mSessionType == SessionType.VIDEO);
+            params.setRecordingHint(mMode == Mode.VIDEO);
             mCamera.setParameters(params);
 
             // Try starting preview.
-            mCamera.setDisplayOrientation(computeSensorToViewOffset()); // <- not allowed during preview
+            mCamera.setDisplayOrientation(offset(REF_SENSOR, REF_VIEW)); // <- not allowed during preview
             if (shouldBindToSurface()) bindToSurface();
             LOG.i("onStart:", "Ended");
         }
@@ -203,7 +202,7 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
 
         if (mCamera != null) {
             LOG.i("onStop:", "Clean up.", "Ending video.");
-            endVideoImmediately();
+            stopVideoImmediately();
 
             try {
                 LOG.i("onStop:", "Clean up.", "Stopping preview.");
@@ -224,14 +223,13 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
                 error = e;
             }
         }
-        mExtraProperties = null;
         mCameraOptions = null;
         mCamera = null;
         mPreviewSize = null;
-        mPictureSize = null;
+        mCaptureSize = null;
         mIsBound = false;
         mIsCapturingImage = false;
-        mIsCapturingVideo = false;
+        mIsTakingVideo = false;
         LOG.w("onStop:", "Clean up.", "Returning.");
         if (error != null) throw new CameraException(error);
     }
@@ -273,9 +271,9 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
     }
 
     @Override
-    void setSessionType(SessionType sessionType) {
-        if (sessionType != mSessionType) {
-            mSessionType = sessionType;
+    void setMode(Mode mode) {
+        if (mode != mMode) {
+            mMode = mode;
             schedule(null, true, new Runnable() {
                 @Override
                 public void run() {
@@ -306,7 +304,7 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
             params.setGpsTimestamp(mLocation.getTime());
             params.setGpsProcessingMethod(mLocation.getProvider());
 
-            if (mIsCapturingVideo && mMediaRecorder != null) {
+            if (mIsTakingVideo && mMediaRecorder != null) {
                 mMediaRecorder.setLocation((float) mLocation.getLatitude(),
                         (float) mLocation.getLongitude());
             }
@@ -394,7 +392,7 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
     @Override
     void setAudio(Audio audio) {
         if (mAudio != audio) {
-            if (mIsCapturingVideo) {
+            if (mIsTakingVideo) {
                 LOG.w("Audio setting was changed while recording. " +
                         "Changes will take place starting from next video");
             }
@@ -430,7 +428,7 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
     private void applyDefaultFocus(Camera.Parameters params) {
         List<String> modes = params.getSupportedFocusModes();
 
-        if (mSessionType == SessionType.VIDEO &&
+        if (mMode == Mode.VIDEO &&
                 modes.contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
             params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
             return;
@@ -454,53 +452,21 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
 
 
     @Override
-    void setVideoQuality(VideoQuality videoQuality) {
-        final VideoQuality old = mVideoQuality;
-        mVideoQuality = videoQuality;
-        schedule(mVideoQualityTask, true, new Runnable() {
-            @Override
-            public void run() {
-                if (mIsCapturingVideo) {
-                    // TODO: actually any call to getParameters() could fail while recording a video.
-                    // See. https://stackoverflow.com/questions/14941625/
-                    mVideoQuality = old;
-                    throw new IllegalStateException("Can't change video quality while recording a video.");
-                }
-
-                if (mSessionType == SessionType.VIDEO) {
-                    // Change capture size to a size that fits the video aspect ratio.
-                    Size oldSize = mPictureSize;
-                    mPictureSize = computePictureSize();
-                    if (!mPictureSize.equals(oldSize)) {
-                        // New video quality triggers a new aspect ratio.
-                        // Go on and see if preview size should change also.
-                        Camera.Parameters params = mCamera.getParameters();
-                        params.setPictureSize(mPictureSize.getWidth(), mPictureSize.getHeight());
-                        mCamera.setParameters(params);
-                        onSurfaceChanged();
-                    }
-                    LOG.i("setVideoQuality:", "captureSize:", mPictureSize);
-                    LOG.i("setVideoQuality:", "previewSize:", mPreviewSize);
-                }
-            }
-        });
-    }
-
-    @Override
-    void capturePicture() {
-        LOG.v("capturePicture: scheduling");
+    void takePicture() {
+        LOG.v("takePicture: scheduling");
         schedule(null, true, new Runnable() {
             @Override
             public void run() {
-                LOG.v("capturePicture: performing.", mIsCapturingImage);
-                if (mIsCapturingImage) return;
-                if (mIsCapturingVideo && !mCameraOptions.isVideoSnapshotSupported()) return;
+                if (mMode == Mode.VIDEO) {
+                    throw new IllegalStateException("Can't take hq pictures while in VIDEO mode");
+                }
 
+                LOG.v("takePicture: performing.", mIsCapturingImage);
+                if (mIsCapturingImage) return;
                 mIsCapturingImage = true;
-                final int sensorToOutput = computeSensorToOutputOffset();
-                final int sensorToView = computeSensorToViewOffset();
-                final boolean outputMatchesView = (sensorToOutput + sensorToView + 180) % 180 == 0;
-                final boolean outputFlip = mFacing == Facing.FRONT;
+
+                final int sensorToOutput = offset(REF_SENSOR, REF_OUTPUT);
+                final Size outputSize = getPictureSize(REF_OUTPUT);
                 Camera.Parameters params = mCamera.getParameters();
                 params.setRotation(sensorToOutput);
                 mCamera.setParameters(params);
@@ -517,7 +483,21 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
                             @Override
                             public void onPictureTaken(byte[] data, final Camera camera) {
                                 mIsCapturingImage = false;
-                                mCameraCallbacks.processImage(data, outputMatchesView, outputFlip);
+                                int exifRotation;
+                                try {
+                                    ExifInterface exif = new ExifInterface(new ByteArrayInputStream(data));
+                                    int exifOrientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+                                    exifRotation = CameraUtils.decodeExifOrientation(exifOrientation);
+                                } catch (IOException e) {
+                                    exifRotation = 0;
+                                }
+                                PictureResult result = new PictureResult();
+                                result.jpeg = data;
+                                result.isSnapshot = false;
+                                result.location = mLocation;
+                                result.rotation = exifRotation;
+                                result.size = outputSize;
+                                mCameraCallbacks.dispatchOnPictureTaken(result);
                                 camera.startPreview(); // This is needed, read somewhere in the docs.
                             }
                         }
@@ -528,47 +508,56 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
 
 
     @Override
-    void captureSnapshot() {
-        LOG.v("captureSnapshot: scheduling");
+    void takePictureSnapshot(final AspectRatio viewAspectRatio) {
+        LOG.v("takePictureSnapshot: scheduling");
         schedule(null, true, new Runnable() {
             @Override
             public void run() {
-                LOG.v("captureSnapshot: performing.", mIsCapturingImage);
-                if (mIsCapturingImage) return;
-                // This won't work while capturing a video.
-                // Switch to capturePicture.
-                if (mIsCapturingVideo) {
-                    capturePicture();
+                if (mIsTakingVideo) {
+                    // TODO v2: what to do here?
+                    // This won't work while capturing a video.
+                    // But we want it to work.
                     return;
                 }
+
+                LOG.v("takePictureSnapshot: performing.", mIsCapturingImage);
+                if (mIsCapturingImage) return;
                 mIsCapturingImage = true;
                 mCamera.setOneShotPreviewCallback(new Camera.PreviewCallback() {
                     @Override
-                    public void onPreviewFrame(final byte[] data, Camera camera) {
+                    public void onPreviewFrame(final byte[] yuv, Camera camera) {
                         mCameraCallbacks.onShutter(true);
 
                         // Got to rotate the preview frame, since byte[] data here does not include
                         // EXIF tags automatically set by camera. So either we add EXIF, or we rotate.
                         // Adding EXIF to a byte array, unfortunately, is hard.
-                        final int sensorToOutput = computeSensorToOutputOffset();
-                        final int sensorToView = computeSensorToViewOffset();
-                        final boolean outputMatchesView = (sensorToOutput + sensorToView + 180) % 180 == 0;
-                        final boolean outputFlip = mFacing == Facing.FRONT;
-                        final boolean flip = sensorToOutput % 180 != 0;
-                        final int preWidth = mPreviewSize.getWidth();
-                        final int preHeight = mPreviewSize.getHeight();
-                        final int postWidth = flip ? preHeight : preWidth;
-                        final int postHeight = flip ? preWidth : preHeight;
+                        final int sensorToOutput = offset(REF_SENSOR, REF_OUTPUT);
+                        final AspectRatio outputRatio = flip(REF_OUTPUT, REF_VIEW) ? viewAspectRatio.inverse() : viewAspectRatio;
+                        final Size outputSize = getPreviewSize(REF_OUTPUT);
                         final int format = mPreviewFormat;
                         WorkerHandler.run(new Runnable() {
                             @Override
                             public void run() {
+                                // Rotate the picture, because no one will write EXIF data,
+                                // then crop if needed. In both cases, transform yuv to jpeg.
+                                LOG.v("takePictureSnapshot:", "rotating.");
+                                byte[] data = RotationHelper.rotate(yuv, mPreviewSize, sensorToOutput);
+                                YuvImage yuv = new YuvImage(data, format, outputSize.getWidth(), outputSize.getHeight(), null);
 
-                                LOG.v("captureSnapshot: rotating.");
-                                byte[] rotatedData = RotationHelper.rotate(data, preWidth, preHeight, sensorToOutput);
-                                LOG.v("captureSnapshot: rotated.");
-                                YuvImage yuv = new YuvImage(rotatedData, format, postWidth, postHeight, null);
-                                mCameraCallbacks.processSnapshot(yuv, outputMatchesView, outputFlip);
+                                LOG.v("takePictureSnapshot:", "rotated. Cropping and transforming to jpeg.");
+                                ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                                Rect outputRect = CropHelper.computeCrop(outputSize, outputRatio);
+                                yuv.compressToJpeg(outputRect, 90, stream);
+                                data = stream.toByteArray();
+
+                                LOG.v("takePictureSnapshot:", "cropped. Dispatching.");
+                                PictureResult result = new PictureResult();
+                                result.jpeg = data;
+                                result.size = new Size(outputRect.width(), outputRect.height());
+                                result.rotation = 0;
+                                result.location = mLocation;
+                                result.isSnapshot = true;
+                                mCameraCallbacks.dispatchOnPictureTaken(result);
                                 mIsCapturingImage = false;
                             }
                         });
@@ -587,7 +576,7 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
     public void onPreviewFrame(byte[] data, Camera camera) {
         Frame frame = mFrameManager.getFrame(data,
                 System.currentTimeMillis(),
-                computeSensorToOutputOffset(),
+                offset(REF_SENSOR, REF_OUTPUT),
                 mPreviewSize,
                 mPreviewFormat);
         mCameraCallbacks.dispatchFrame(frame);
@@ -618,109 +607,113 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
 
 
     @Override
-    void startVideo(@NonNull final File videoFile) {
+    void takeVideo(@NonNull final File videoFile) {
         schedule(mStartVideoTask, true, new Runnable() {
             @Override
             public void run() {
-                if (mIsCapturingVideo) return;
-                if (mSessionType == SessionType.VIDEO) {
-                    mVideoFile = videoFile;
-                    mIsCapturingVideo = true;
-                    initMediaRecorder();
-                    try {
-                        mMediaRecorder.prepare();
-                        mMediaRecorder.start();
-                    } catch (Exception e) {
-                        LOG.e("Error while starting MediaRecorder. Swallowing.", e);
-                        mVideoFile = null;
-                        mCamera.lock();
-                        endVideoImmediately();
+                if (mMode == Mode.PICTURE) {
+                    throw new IllegalStateException("Can't record video while in PICTURE mode");
+                }
+
+                if (mIsTakingVideo) return;
+                mIsTakingVideo = true;
+
+                // Create the video result
+                final Size videoSize = mCaptureSize;
+                mVideoResult = new VideoResult();
+                mVideoResult.file = videoFile;
+                mVideoResult.isSnapshot = false;
+                mVideoResult.codec = mVideoCodec;
+                mVideoResult.location = mLocation;
+                mVideoResult.rotation = offset(REF_SENSOR, REF_OUTPUT);
+                mVideoResult.size = flip(REF_SENSOR, REF_OUTPUT) ? videoSize.flip() : videoSize;
+
+                // Initialize the media recorder
+                mCamera.unlock();
+                mMediaRecorder = new MediaRecorder();
+                mMediaRecorder.setCamera(mCamera);
+                mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
+                if (mAudio == Audio.ON) {
+                    // Must be called before setOutputFormat.
+                    mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.DEFAULT);
+                }
+
+                // TODO: should get a profile of a quality compatible with the chosen size.
+                final CamcorderProfile profile = CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_HIGH);
+                mMediaRecorder.setOutputFormat(profile.fileFormat);
+                mMediaRecorder.setVideoFrameRate(profile.videoFrameRate);
+                mMediaRecorder.setVideoSize(videoSize.getWidth(), videoSize.getHeight());
+                mMediaRecorder.setVideoEncoder(mMapper.map(mVideoCodec));
+                mMediaRecorder.setVideoEncodingBitRate(profile.videoBitRate);
+                if (mAudio == Audio.ON) {
+                    mMediaRecorder.setAudioChannels(profile.audioChannels);
+                    mMediaRecorder.setAudioSamplingRate(profile.audioSampleRate);
+                    mMediaRecorder.setAudioEncoder(profile.audioCodec);
+                    mMediaRecorder.setAudioEncodingBitRate(profile.audioBitRate);
+                }
+                if (mLocation != null) {
+                    mMediaRecorder.setLocation(
+                            (float) mLocation.getLatitude(),
+                            (float) mLocation.getLongitude());
+                }
+                mMediaRecorder.setOutputFile(mVideoResult.getFile().getAbsolutePath());
+                mMediaRecorder.setOrientationHint(mVideoResult.getRotation());
+                mMediaRecorder.setMaxFileSize(mVideoMaxSize);
+                mMediaRecorder.setMaxDuration(mVideoMaxDuration);
+                mMediaRecorder.setOnInfoListener(new MediaRecorder.OnInfoListener() {
+                    @Override
+                    public void onInfo(MediaRecorder mediaRecorder, int what, int extra) {
+                        switch (what) {
+                            case MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED:
+                            case MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED:
+                                stopVideoImmediately();
+                                break;
+                        }
                     }
-                } else {
-                    throw new IllegalStateException("Can't record video while session type is picture");
+                });
+                // Not needed. mMediaRecorder.setPreviewDisplay(mPreview.getSurface());
+
+                try {
+                    mMediaRecorder.prepare();
+                    mMediaRecorder.start();
+                } catch (Exception e) {
+                    LOG.e("Error while starting MediaRecorder. Swallowing.", e);
+                    mVideoResult = null;
+                    mCamera.lock();
+                    stopVideoImmediately();
                 }
             }
         });
     }
 
     @Override
-    void endVideo() {
+    void stopVideo() {
         schedule(null, false, new Runnable() {
             @Override
             public void run() {
-                endVideoImmediately();
+                stopVideoImmediately();
             }
         });
     }
 
     @WorkerThread
-    private void endVideoImmediately() {
-        LOG.i("endVideoImmediately:", "is capturing:", mIsCapturingVideo);
-        mIsCapturingVideo = false;
+    private void stopVideoImmediately() {
+        LOG.i("stopVideoImmediately:", "is capturing:", mIsTakingVideo);
+        mIsTakingVideo = false;
         if (mMediaRecorder != null) {
             try {
                 mMediaRecorder.stop();
             } catch (Exception e) {
-                // This can happen if endVideo() is called right after startVideo(). We don't care.
-                LOG.w("endVideoImmediately:", "Error while closing media recorder. Swallowing", e);
+                // This can happen if stopVideo() is called right after takeVideo(). We don't care.
+                LOG.w("stopVideoImmediately:", "Error while closing media recorder. Swallowing", e);
             }
             mMediaRecorder.release();
             mMediaRecorder = null;
         }
-        if (mVideoFile != null) {
-            mCameraCallbacks.dispatchOnVideoTaken(mVideoFile);
-            mVideoFile = null;
+        if (mVideoResult != null) {
+            mCameraCallbacks.dispatchOnVideoTaken(mVideoResult);
+            mVideoResult = null;
         }
-    }
-
-    @WorkerThread
-    private void initMediaRecorder() {
-        mMediaRecorder = new MediaRecorder();
-        mCamera.unlock();
-        mMediaRecorder.setCamera(mCamera);
-
-        mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
-        if (mAudio == Audio.ON) {
-            // Must be called before setOutputFormat.
-            mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.DEFAULT);
-        }
-        CamcorderProfile profile = getCamcorderProfile();
-        mMediaRecorder.setOutputFormat(profile.fileFormat);
-        mMediaRecorder.setVideoFrameRate(profile.videoFrameRate);
-        mMediaRecorder.setVideoSize(profile.videoFrameWidth, profile.videoFrameHeight);
-        mMediaRecorder.setVideoEncoder(mMapper.map(mVideoCodec));
-        mMediaRecorder.setVideoEncodingBitRate(profile.videoBitRate);
-        if (mAudio == Audio.ON) {
-            mMediaRecorder.setAudioChannels(profile.audioChannels);
-            mMediaRecorder.setAudioSamplingRate(profile.audioSampleRate);
-            mMediaRecorder.setAudioEncoder(profile.audioCodec);
-            mMediaRecorder.setAudioEncodingBitRate(profile.audioBitRate);
-        }
-
-        if (mLocation != null) {
-            mMediaRecorder.setLocation(
-                    (float) mLocation.getLatitude(),
-                    (float) mLocation.getLongitude());
-        }
-
-        mMediaRecorder.setOutputFile(mVideoFile.getAbsolutePath());
-        mMediaRecorder.setOrientationHint(computeSensorToOutputOffset());
-
-        mMediaRecorder.setMaxFileSize(mVideoMaxSize);
-        mMediaRecorder.setMaxDuration(mVideoMaxDuration);
-
-        mMediaRecorder.setOnInfoListener(new MediaRecorder.OnInfoListener() {
-            @Override
-            public void onInfo(MediaRecorder mediaRecorder, int what, int extra) {
-                switch (what) {
-                    case MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED:
-                    case MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED:
-                        endVideoImmediately();
-                        break;
-                }
-            }
-        });
-        // Not needed. mMediaRecorder.setPreviewDisplay(mPreview.getSurface());
     }
 
     // -----------------
@@ -793,7 +786,7 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
                 if (!mCameraOptions.isAutoFocusSupported()) return;
                 final PointF p = new PointF(point.x, point.y); // copy.
                 List<Camera.Area> meteringAreas2 = computeMeteringAreas(p.x, p.y,
-                        viewWidthF, viewHeightF, computeSensorToViewOffset());
+                        viewWidthF, viewHeightF, offset(REF_SENSOR, REF_VIEW));
                 List<Camera.Area> meteringAreas1 = meteringAreas2.subList(0, 1);
 
                 // At this point we are sure that camera supports auto focus... right? Look at CameraView.onTouchEvent().

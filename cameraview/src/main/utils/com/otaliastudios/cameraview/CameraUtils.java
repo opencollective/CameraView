@@ -7,7 +7,6 @@ import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
 import android.hardware.Camera;
 import android.os.Handler;
-import android.support.annotation.UiThread;
 import android.support.media.ExifInterface;
 
 import java.io.ByteArrayInputStream;
@@ -45,7 +44,7 @@ public class CameraUtils {
      * @return true if such sensor exists
      */
     public static boolean hasCameraFacing(Context context, Facing facing) {
-        int internal = new Mapper.Mapper1().map(facing);
+        int internal = new Mapper1().map(facing);
         Camera.CameraInfo cameraInfo = new Camera.CameraInfo();
         for (int i = 0, count = Camera.getNumberOfCameras(); i < count; i++) {
             Camera.getCameraInfo(i, cameraInfo);
@@ -112,27 +111,8 @@ public class CameraUtils {
             // http://sylvana.net/jpegcrop/exif_orientation.html
             stream = new ByteArrayInputStream(source);
             ExifInterface exif = new ExifInterface(stream);
-            Integer exifOrientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
-            switch (exifOrientation) {
-                case ExifInterface.ORIENTATION_NORMAL:
-                case ExifInterface.ORIENTATION_FLIP_HORIZONTAL:
-                    orientation = 0; break;
-
-                case ExifInterface.ORIENTATION_ROTATE_180:
-                case ExifInterface.ORIENTATION_FLIP_VERTICAL:
-                    orientation = 180; break;
-
-                case ExifInterface.ORIENTATION_ROTATE_90:
-                case ExifInterface.ORIENTATION_TRANSPOSE:
-                    orientation = 90; break;
-
-                case ExifInterface.ORIENTATION_ROTATE_270:
-                case ExifInterface.ORIENTATION_TRANSVERSE:
-                    orientation = 270; break;
-
-                default: orientation = 0;
-            }
-
+            int exifOrientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+            orientation = decodeExifOrientation(exifOrientation);
             flip = exifOrientation == ExifInterface.ORIENTATION_FLIP_HORIZONTAL ||
                     exifOrientation == ExifInterface.ORIENTATION_FLIP_VERTICAL ||
                     exifOrientation == ExifInterface.ORIENTATION_TRANSPOSE ||
@@ -179,6 +159,30 @@ public class CameraUtils {
         return bitmap;
     }
 
+    static int decodeExifOrientation(int exifOrientation) {
+        int orientation;
+        switch (exifOrientation) {
+            case ExifInterface.ORIENTATION_NORMAL:
+            case ExifInterface.ORIENTATION_FLIP_HORIZONTAL:
+                orientation = 0; break;
+
+            case ExifInterface.ORIENTATION_ROTATE_180:
+            case ExifInterface.ORIENTATION_FLIP_VERTICAL:
+                orientation = 180; break;
+
+            case ExifInterface.ORIENTATION_ROTATE_90:
+            case ExifInterface.ORIENTATION_TRANSPOSE:
+                orientation = 90; break;
+
+            case ExifInterface.ORIENTATION_ROTATE_270:
+            case ExifInterface.ORIENTATION_TRANSVERSE:
+                orientation = 270; break;
+
+            default: orientation = 0;
+        }
+        return orientation;
+    }
+
 
     private static int computeSampleSize(int width, int height, int maxWidth, int maxHeight) {
         // https://developer.android.com/topic/performance/graphics/load-bitmap.html
@@ -193,17 +197,4 @@ public class CameraUtils {
     }
 
 
-    /**
-     * Receives callbacks about a bitmap decoding operation.
-     */
-    public interface BitmapCallback {
-
-        /**
-         * Notifies that the bitmap was succesfully decoded.
-         * This is run on the UI thread.
-         *
-         * @param bitmap decoded bitmap
-         */
-        @UiThread void onBitmapReady(Bitmap bitmap);
-    }
 }
