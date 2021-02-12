@@ -6,7 +6,6 @@ import android.location.Location;
 
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
-import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.support.annotation.NonNull;
@@ -15,6 +14,7 @@ import android.support.annotation.WorkerThread;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 abstract class CameraController implements
@@ -30,6 +30,10 @@ abstract class CameraController implements
     static final int STATE_STARTING = 1; // Camera is about to start.
     static final int STATE_STARTED = 2; // Camera is available and we can set parameters.
 
+    static final int REF_SENSOR = 0;
+    static final int REF_VIEW = 1;
+    static final int REF_OUTPUT = 2;
+
     protected final CameraView.CameraCallbacks mCameraCallbacks;
     protected CameraPreview mPreview;
     protected WorkerHandler mHandler;
@@ -38,9 +42,8 @@ abstract class CameraController implements
     protected Facing mFacing;
     protected Flash mFlash;
     protected WhiteBalance mWhiteBalance;
-    protected VideoQuality mVideoQuality;
     protected VideoCodec mVideoCodec;
-    protected SessionType mSessionType;
+    protected Mode mMode;
     protected Hdr mHdr;
     protected Location mLocation;
     protected Audio mAudio;
@@ -49,16 +52,16 @@ abstract class CameraController implements
     protected boolean mPlaySounds;
 
     protected int mCameraId;
-    protected ExtraProperties mExtraProperties;
     protected CameraOptions mCameraOptions;
     protected Mapper mMapper;
     protected FrameManager mFrameManager;
     protected SizeSelector mPictureSizeSelector;
+    protected SizeSelector mVideoSizeSelector;
     protected MediaRecorder mMediaRecorder;
-    protected File mVideoFile;
+    protected VideoResult mVideoResult;
     protected long mVideoMaxSize;
     protected int mVideoMaxDuration;
-    protected Size mPictureSize;
+    protected Size mCaptureSize;
     protected Size mPreviewSize;
     protected int mPreviewFormat;
 
@@ -67,7 +70,7 @@ abstract class CameraController implements
     private int mDeviceOrientation;
 
     protected boolean mIsCapturingImage = false;
-    protected boolean mIsCapturingVideo = false;
+    protected boolean mIsTakingVideo = false;
 
     protected int mState = STATE_STOPPED;
 
@@ -278,6 +281,10 @@ abstract class CameraController implements
         mPictureSizeSelector = selector;
     }
 
+    final void setVideoSizeSelector(SizeSelector selector) {
+        mVideoSizeSelector = selector;
+    }
+
     final void setVideoMaxSize(long videoMaxSizeBytes) {
         mVideoMaxSize = videoMaxSizeBytes;
     }
@@ -296,7 +303,7 @@ abstract class CameraController implements
     //region Abstract setters and APIs
 
     // Should restart the session if active.
-    abstract void setSessionType(SessionType sessionType);
+    abstract void setMode(Mode mode);
 
     // Should restart the session if active.
     abstract void setFacing(Facing facing);
@@ -322,16 +329,13 @@ abstract class CameraController implements
     // Just set.
     abstract void setAudio(Audio audio);
 
-    // Throw if capturing. If in video session, recompute capture size, and, if needed, preview size.
-    abstract void setVideoQuality(VideoQuality videoQuality);
+    abstract void takePicture();
 
-    abstract void capturePicture();
+    abstract void takePictureSnapshot(AspectRatio viewAspectRatio);
 
-    abstract void captureSnapshot();
+    abstract void takeVideo(@NonNull File file);
 
-    abstract void startVideo(@NonNull File file);
-
-    abstract void endVideo();
+    abstract void stopVideo();
 
     abstract void startAutoFocus(@Nullable Gesture gesture, PointF point);
 
@@ -340,11 +344,6 @@ abstract class CameraController implements
     //endregion
 
     //region final getters
-
-    @Nullable
-    final ExtraProperties getExtraProperties() {
-        return mExtraProperties;
-    }
 
     @Nullable
     final CameraOptions getCameraOptions() {
@@ -363,10 +362,6 @@ abstract class CameraController implements
         return mWhiteBalance;
     }
 
-    final VideoQuality getVideoQuality() {
-        return mVideoQuality;
-    }
-
     final VideoCodec getVideoCodec() {
         return mVideoCodec;
     }
@@ -379,8 +374,8 @@ abstract class CameraController implements
         return mVideoMaxDuration;
     }
 
-    final SessionType getSessionType() {
-        return mSessionType;
+    final Mode getMode() {
+        return mMode;
     }
 
     final Hdr getHdr() {
@@ -395,12 +390,12 @@ abstract class CameraController implements
         return mAudio;
     }
 
-    final SizeSelector getPictureSizeSelector() {
+    /* for tests */ final SizeSelector getPictureSizeSelector() {
         return mPictureSizeSelector;
     }
 
-    final Size getPictureSize() {
-        return mPictureSize;
+    /* for tests */ final SizeSelector getVideoSizeSelector() {
+        return mVideoSizeSelector;
     }
 
     final float getZoomValue() {
@@ -411,55 +406,67 @@ abstract class CameraController implements
         return mExposureCorrectionValue;
     }
 
-    final Size getPreviewSize() {
-        return mPreviewSize;
-    }
-
-    final boolean isCapturingVideo() {
-        return mIsCapturingVideo;
+    final boolean isTakingVideo() {
+        return mIsTakingVideo;
     }
 
     //endregion
 
     //region Orientation utils
 
-    /**
-     * The result of this should not change after start() is called: the sensor offset is the same,
-     * and the display offset does not change.
-     */
-    final boolean shouldFlipSizes() {
-        int offset = computeSensorToViewOffset();
-        LOG.i("shouldFlipSizes:", "displayOffset=", mDisplayOffset, "sensorOffset=", mSensorOffset);
-        LOG.i("shouldFlipSizes:", "sensorToDisplay=", offset);
-        return offset % 180 != 0;
-    }
-
-    /**
-     * Returns how much should the sensor image be rotated before being shown.
-     * It is meant to be fed to Camera.setDisplayOrientation().
-     * The result of this should not change after start() is called: the sensor offset is the same,
-     * and the display offset does not change.
-     */
-    protected final int computeSensorToViewOffset() {
+    private int computeSensorToViewOffset() {
         if (mFacing == Facing.FRONT) {
-            // Here we had ((mSensorOffset - mDisplayOffset) + 360 + 180) % 360
-            // And it seemed to give the same results for various combinations, but not for all (e.g. 0 - 270).
             return (360 - ((mSensorOffset + mDisplayOffset) % 360)) % 360;
         } else {
             return (mSensorOffset - mDisplayOffset + 360) % 360;
         }
     }
 
-    /**
-     * Returns the orientation to be set as a exif tag.
-     */
-    protected final int computeSensorToOutputOffset() {
+    private int computeSensorToOutputOffset() {
         if (mFacing == Facing.FRONT) {
             return (mSensorOffset - mDeviceOrientation + 360) % 360;
         } else {
             return (mSensorOffset + mDeviceOrientation) % 360;
         }
     }
+
+    // Returns the offset between two reference systems.
+    final int offset(int fromReference, int toReference) {
+        if (fromReference == toReference) return 0;
+        // We only know how to compute offsets with respect to REF_SENSOR.
+        // That's why we separate the two cases.
+        if (fromReference == REF_SENSOR) {
+            return toReference == REF_VIEW ?
+                    computeSensorToViewOffset() :
+                    computeSensorToOutputOffset();
+        }
+        // Maybe the sensor is the other.
+        if (toReference == REF_SENSOR) {
+            return -offset(toReference, fromReference) + 360;
+        }
+        // None of them is the sensor. Use a difference.
+        return (offset(REF_SENSOR, toReference) - offset(REF_SENSOR, fromReference) + 360) % 360;
+    }
+
+    final boolean flip(int reference1, int reference2) {
+        return offset(reference1, reference2) % 180 != 0;
+    }
+
+    final Size getPictureSize(int reference) {
+        if (mCaptureSize == null || mMode == Mode.VIDEO) return null;
+        return flip(REF_SENSOR, reference) ? mCaptureSize.flip() : mCaptureSize;
+    }
+
+    final Size getVideoSize(int reference) {
+        if (mCaptureSize == null || mMode == Mode.PICTURE) return null;
+        return flip(REF_SENSOR, reference) ? mCaptureSize.flip() : mCaptureSize;
+    }
+
+    final Size getPreviewSize(int reference) {
+        if (mPreviewSize == null) return null;
+        return flip(REF_SENSOR, reference) ? mPreviewSize.flip() : mPreviewSize;
+    }
+
 
     //endregion
 
@@ -472,101 +479,51 @@ abstract class CameraController implements
      * But when it does, the {@link CameraPreview.SurfaceCallback} should be called,
      * and this should be refreshed.
      */
-    protected final Size computePictureSize() {
-        // The external selector is expecting stuff in the view world, not in the sensor world.
-        // Use the list in the camera options, then flip the result if needed.
-        boolean flip = shouldFlipSizes();
+    protected final Size computeCaptureSize() {
+        // We want to pass stuff into the REF_VIEW reference, not the sensor one.
+        // This is already managed by CameraOptions, so we just flip again at the end.
+        boolean flip = flip(REF_SENSOR, REF_VIEW);
         SizeSelector selector;
-
-        if (mSessionType == SessionType.PICTURE) {
-            selector = SizeSelectors.or(mPictureSizeSelector, SizeSelectors.biggest());
+        Collection<Size> sizes;
+        if (mMode == Mode.PICTURE) {
+            selector = mPictureSizeSelector;
+            sizes = mCameraOptions.getSupportedPictureSizes();
         } else {
-            // The Camcorder internally checks for cameraParameters.getSupportedVideoSizes() etc.
-            // And we want the picture size to be the biggest picture consistent with the video aspect ratio.
-            // -> Use the external picture selector, but enforce the ratio constraint.
-            CamcorderProfile profile = getCamcorderProfile();
-            AspectRatio targetRatio = AspectRatio.of(profile.videoFrameWidth, profile.videoFrameHeight);
-            if (flip) targetRatio = targetRatio.inverse();
-            LOG.i("size:", "computeCaptureSize:", "videoQuality:", mVideoQuality, "targetRatio:", targetRatio);
-            SizeSelector matchRatio = SizeSelectors.aspectRatio(targetRatio, 0);
-            selector = SizeSelectors.or(
-                    SizeSelectors.and(matchRatio, mPictureSizeSelector),
-                    SizeSelectors.and(matchRatio),
-                    mPictureSizeSelector
-            );
+            selector = mVideoSizeSelector;
+            sizes = mCameraOptions.getSupportedVideoSizes();
         }
-
-        List<Size> list = new ArrayList<>(mCameraOptions.getSupportedPictureSizes());
+        selector = SizeSelectors.or(selector, SizeSelectors.biggest());
+        List<Size> list = new ArrayList<>(sizes);
         Size result = selector.select(list).get(0);
-        LOG.i("computePictureSize:", "result:", result, "flip:", flip);
-        if (flip) result = result.flip();
+        LOG.i("computeCaptureSize:", "result:", result, "flip:", flip);
+        if (flip) result = result.flip(); // Go back to REF_SENSOR
         return result;
     }
 
     protected final Size computePreviewSize(List<Size> previewSizes) {
-        // instead of flipping everything to the view world, we can just flip the
-        // surface size to the sensor world
-        boolean flip = shouldFlipSizes();
-        AspectRatio targetRatio = AspectRatio.of(mPictureSize.getWidth(), mPictureSize.getHeight());
+        // instead of flipping everything to REF_VIEW, we can just flip the
+        // surface size from REF_VIEW to REF_SENSOR, and reflip at the end.
+        AspectRatio targetRatio = AspectRatio.of(mCaptureSize.getWidth(), mCaptureSize.getHeight());
         Size targetMinSize = mPreview.getSurfaceSize();
+        boolean flip = flip(REF_VIEW, REF_SENSOR);
         if (flip) targetMinSize = targetMinSize.flip();
         LOG.i("size:", "computePreviewSize:", "targetRatio:", targetRatio, "targetMinSize:", targetMinSize);
-        SizeSelector matchRatio = SizeSelectors.aspectRatio(targetRatio, 0);
-        SizeSelector matchSize = SizeSelectors.and(
+        SizeSelector matchRatio = SizeSelectors.and( // Match this aspect ratio and sort by biggest
+                SizeSelectors.aspectRatio(targetRatio, 0),
+                SizeSelectors.biggest());
+        SizeSelector matchSize = SizeSelectors.and( // Bigger than this size, and sort by smallest
                 SizeSelectors.minHeight(targetMinSize.getHeight()),
-                SizeSelectors.minWidth(targetMinSize.getWidth()));
+                SizeSelectors.minWidth(targetMinSize.getWidth()),
+                SizeSelectors.smallest());
         SizeSelector matchAll = SizeSelectors.or(
-                SizeSelectors.and(matchRatio, matchSize),
-                SizeSelectors.and(matchRatio, SizeSelectors.biggest()), // If couldn't match both, match ratio and biggest.
+                SizeSelectors.and(matchRatio, matchSize), // Try to respect both constraints.
+                matchSize, // If couldn't match aspect ratio, at least respect the size
+                matchRatio, // If couldn't respect size, at least match aspect ratio
                 SizeSelectors.biggest() // If couldn't match any, take the biggest.
         );
         Size result = matchAll.select(previewSizes).get(0);
         LOG.i("computePreviewSize:", "result:", result, "flip:", flip);
         return result;
-    }
-
-    @NonNull
-    protected final CamcorderProfile getCamcorderProfile() {
-        switch (mVideoQuality) {
-            case HIGHEST:
-                return CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_HIGH);
-
-            case MAX_2160P:
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP &&
-                        CamcorderProfile.hasProfile(CamcorderProfile.QUALITY_2160P)) {
-                    return CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_2160P);
-                }
-                // Don't break.
-
-            case MAX_1080P:
-                if (CamcorderProfile.hasProfile(mCameraId, CamcorderProfile.QUALITY_1080P)) {
-                    return CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_1080P);
-                }
-                // Don't break.
-
-            case MAX_720P:
-                if (CamcorderProfile.hasProfile(mCameraId, CamcorderProfile.QUALITY_720P)) {
-                    return CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_720P);
-                }
-                // Don't break.
-
-            case MAX_480P:
-                if (CamcorderProfile.hasProfile(mCameraId, CamcorderProfile.QUALITY_480P)) {
-                    return CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_480P);
-                }
-                // Don't break.
-
-            case MAX_QVGA:
-                if (CamcorderProfile.hasProfile(mCameraId, CamcorderProfile.QUALITY_QVGA)) {
-                    return CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_QVGA);
-                }
-                // Don't break.
-
-            case LOWEST:
-            default:
-                // Fallback to lowest.
-                return CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_LOW);
-        }
     }
 
     //endregion

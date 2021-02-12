@@ -4,8 +4,6 @@ import android.graphics.PointF;
 import android.support.annotation.NonNull;
 import android.support.annotation.UiThread;
 
-import java.io.File;
-
 public abstract class CameraListener {
 
 
@@ -50,33 +48,28 @@ public abstract class CameraListener {
 
 
     /**
-     * Notifies that a picture previously captured with {@link CameraView#capturePicture()}
-     * or {@link CameraView#captureSnapshot()} is ready to be shown or saved.
+     * Notifies that a picture previously captured with {@link CameraView#takePicture()}
+     * or {@link CameraView#takePictureSnapshot()} is ready to be shown or saved to file.
      *
-     * If planning to get a bitmap, you can use {@link CameraUtils#decodeBitmap(byte[], CameraUtils.BitmapCallback)}
-     * to decode the byte array taking care about orientation.
+     * If planning to show a bitmap, you can use {@link PictureResult#asBitmap(int, int, BitmapCallback)}
+     * to decode the byte array taking care about orientation and threading.
      *
-     * @param jpeg captured picture
+     * @param result captured picture
      */
     @UiThread
-    public void onPictureTaken(byte[] jpeg) {
-        // TODO v2: use a PictureResult.
+    public void onPictureTaken(PictureResult result) {
+
     }
 
 
     /**
-     * Notifies that a video capture has just ended. The file parameter is the one that
-     * was passed to {@link CameraView#startCapturingVideo(File)}, if any.
-     * If not, the camera fallsback to:
-     * <code>
-     *     new File(getContext().getExternalFilesDir(null), "video.mp4");
-     * </code>
+     * Notifies that a video capture has just ended.
      *
-     * @param video file hosting the mp4 video
+     * @param result the video result
      */
     @UiThread
-    public void onVideoTaken(File video) {
-        // TODO v2: use a VideoResult.
+    public void onVideoTaken(VideoResult result) {
+
     }
 
 
