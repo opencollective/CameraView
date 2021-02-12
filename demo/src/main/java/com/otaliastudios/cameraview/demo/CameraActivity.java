@@ -17,8 +17,9 @@ import com.otaliastudios.cameraview.CameraListener;
 import com.otaliastudios.cameraview.CameraLogger;
 import com.otaliastudios.cameraview.CameraOptions;
 import com.otaliastudios.cameraview.CameraView;
-import com.otaliastudios.cameraview.SessionType;
-import com.otaliastudios.cameraview.Size;
+import com.otaliastudios.cameraview.PictureResult;
+import com.otaliastudios.cameraview.Mode;
+import com.otaliastudios.cameraview.VideoResult;
 
 import java.io.File;
 
@@ -32,7 +33,6 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
     private boolean mCapturingVideo;
 
     // To show stuff in the callback
-    private Size mCaptureNativeSize;
     private long mCaptureTime;
 
     @Override
@@ -46,17 +46,18 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
         camera = findViewById(R.id.camera);
         camera.addCameraListener(new CameraListener() {
             public void onCameraOpened(CameraOptions options) { onOpened(); }
-            public void onPictureTaken(byte[] jpeg) { onPicture(jpeg); }
+            public void onPictureTaken(PictureResult result) { onPicture(result); }
 
             @Override
-            public void onVideoTaken(File video) {
-                super.onVideoTaken(video);
-                onVideo(video);
+            public void onVideoTaken(VideoResult result) {
+                super.onVideoTaken(result);
+                onVideo(result.getFile());
             }
         });
 
         findViewById(R.id.edit).setOnClickListener(this);
-        findViewById(R.id.capturePhoto).setOnClickListener(this);
+        findViewById(R.id.capturePicture).setOnClickListener(this);
+        findViewById(R.id.capturePictureSnapshot).setOnClickListener(this);
         findViewById(R.id.captureVideo).setOnClickListener(this);
         findViewById(R.id.toggleCamera).setOnClickListener(this);
 
@@ -91,27 +92,24 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
         }
     }
 
-    private void onPicture(byte[] jpeg) {
+    private void onPicture(PictureResult result) {
         mCapturingPicture = false;
         long callbackTime = System.currentTimeMillis();
         if (mCapturingVideo) {
-            message("Captured while taking video. Size="+mCaptureNativeSize, false);
+            message("Captured while taking video. Size=" + result.getSize(), false);
             return;
         }
 
         // This can happen if picture was taken with a gesture.
         if (mCaptureTime == 0) mCaptureTime = callbackTime - 300;
-        if (mCaptureNativeSize == null) mCaptureNativeSize = camera.getPictureSize();
-
-        PicturePreviewActivity.setImage(jpeg);
+        PicturePreviewActivity.setImage(result.getJpeg());
         Intent intent = new Intent(CameraActivity.this, PicturePreviewActivity.class);
         intent.putExtra("delay", callbackTime - mCaptureTime);
-        intent.putExtra("nativeWidth", mCaptureNativeSize.getWidth());
-        intent.putExtra("nativeHeight", mCaptureNativeSize.getHeight());
+        intent.putExtra("nativeWidth", result.getSize().getWidth());
+        intent.putExtra("nativeHeight", result.getSize().getHeight());
         startActivity(intent);
 
         mCaptureTime = 0;
-        mCaptureNativeSize = null;
     }
 
     private void onVideo(File video) {
@@ -125,7 +123,8 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
     public void onClick(View view) {
         switch (view.getId()) {
             case R.id.edit: edit(); break;
-            case R.id.capturePhoto: capturePhoto(); break;
+            case R.id.capturePicture: capturePicture(); break;
+            case R.id.capturePictureSnapshot: capturePictureSnapshot(); break;
             case R.id.captureVideo: captureVideo(); break;
             case R.id.toggleCamera: toggleCamera(); break;
         }
@@ -146,24 +145,35 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
         b.setState(BottomSheetBehavior.STATE_COLLAPSED);
     }
 
-    private void capturePhoto() {
+    private void capturePicture() {
+        if (camera.getMode() == Mode.VIDEO) {
+            message("Can't take HQ pictures while in VIDEO mode.", false);
+            return;
+        }
         if (mCapturingPicture) return;
         mCapturingPicture = true;
         mCaptureTime = System.currentTimeMillis();
-        mCaptureNativeSize = camera.getPictureSize();
         message("Capturing picture...", false);
-        camera.capturePicture();
+        camera.takePicture();
+    }
+
+    private void capturePictureSnapshot() {
+        if (mCapturingPicture) return;
+        mCapturingPicture = true;
+        mCaptureTime = System.currentTimeMillis();
+        message("Capturing picture snapshot...", false);
+        camera.takePictureSnapshot();
     }
 
     private void captureVideo() {
-        if (camera.getSessionType() != SessionType.VIDEO) {
-            message("Can't record video while session type is 'picture'.", false);
+        if (camera.getMode() == Mode.PICTURE) {
+            message("Can't record HQ videos while in PICTURE mode.", false);
             return;
         }
         if (mCapturingPicture || mCapturingVideo) return;
         mCapturingVideo = true;
         message("Recording for 8 seconds...", true);
-        camera.startCapturingVideo(null, 8000);
+        camera.takeVideo(null, 8000);
     }
 
     private void toggleCamera() {
