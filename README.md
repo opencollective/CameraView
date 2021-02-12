@@ -1,5 +1,7 @@
 [![Build Status](https://travis-ci.org/natario1/CameraView.svg?branch=master)](https://travis-ci.org/natario1/CameraView)
 [![Code Coverage](https://codecov.io/gh/natario1/CameraView/branch/master/graph/badge.svg)](https://codecov.io/gh/natario1/CameraView)
+[![OpenCollective Backers](https://opencollective.com/cameraview/backers/badge.svg)](#backers)
+[![OpenCollective Sponsors](https://opencollective.com/cameraview/sponsors/badge.svg)](#sponsors)
 
 <p align="center">
   <img src="art/icon.png" vspace="10" width="250" height="250">
@@ -15,7 +17,7 @@ See [CHANGELOG](https://github.com/natario1/CameraView/blob/master/CHANGELOG.md)
 compile 'com.otaliastudios:cameraview:1.5.0'
 ```
 
-Make sure your project repositories include the `jcenter()`:
+Make sure your project repositories include jcenter:
 
 ```groovy
 allprojects {
@@ -78,7 +80,7 @@ See below for a [list of what was done](#roadmap) and [licensing info](#contribu
 - [Permissions Behavior](#permissions-behavior)
 - [Logging](#logging)
 - [Device-specific issues](#device-specific-issues)
-- [Roadmap](#roadmap)
+- [Contributing](#contributing-and-licenses)
 
 ## Usage
 
@@ -714,56 +716,36 @@ the most tricky in this sense.
 - Devices with no support for MediaRecorder: the emulator does not support it, officially. This means
   that video/audio recording is flawed. Again, not our fault.
 
-## Roadmap
-
-This is what was done since the library was forked. I have kept the original structure, but practically
-all the code was changed.
-
-- *a huge number of serious bugs fixed*
-- *decent orientation support for both pictures and videos*
-- *less dependencies*
-- *EXIF support*
-- *real tap-to-focus support*
-- *pinch-to-zoom support*
-- *simpler APIs, docs and heavily commented code*
-- *new `captureSnapshot` API*
-- *new `setLocation` and `setWhiteBalance` APIs*
-- *new `setGrid` APIs, to draw 3x3, 4x4 or golden ratio grids*
-- *option to pass a `File` when recording a video*
-- *other minor API additions*
-- *replacing Method and Permissions stuff with simpler `sessionType`* 
-- *smart measuring and sizing behavior, replacing bugged `adjustViewBounds`*
-- *measure `CameraView` as center crop or center inside*
-- *add multiple `CameraListener`s for events*
-- *gesture framework support, map gestures to camera controls*
-- *pinch gesture support*
-- *tap & long tap gesture support*
-- *scroll gestures support*
-- *MediaActionSound support*
-- *Hdr controls*
-- *zoom and exposure correction controls*
-- *Tests!*
-- *`CameraLogger` APIs for logging and bug reports*
-- *Better threading, start() in worker thread and callbacks in UI*
-- *Frame processor support*
-- *inject external loggers*
-- *error handling*
-- *capture size selectors*
-
-These are still things that need to be done, off the top of my head:
-
-- [ ] `Camera2` integration
-- [ ] animate grid lines similar to stock camera app
-- [ ] add onRequestPermissionResults for easy permission callback
-- [ ] decent code coverage
-
 # Contributing and licenses
 
 The original project which served as a starting point for this library,
 [CameraKit-Android](https://github.com/wonderkiln/CameraKit-Android), is licensed under the
 [MIT](https://github.com/wonderkiln/CameraKit-Android/blob/master/LICENSE) license.
 Additional work is now licensed under the [MIT](https://github.com/natario1/CameraView/blob/master/LICENSE)
-license as well.
+license as well. To contact the maintainer, <a href="mailto:mat.iavarone@gmail.com">send an email.</a>
 
 You are welcome to contribute with suggestions or pull requests, this is under active development.
-To contact me, <a href="mailto:mat.iavarone@gmail.com">send an email.</a>
+If you don't want to get involved but would like to support the project, please consider a donation
+to our [Open Collective](https://opencollective.com/cameraview/donate).
+
+## Backers
+
+Thanks to all our backers! [Become a backer.](https://opencollective.com/cameraview#backer)
+
+<a href="https://opencollective.com/cameraview#backers" target="_blank"><img src="https://opencollective.com/cameraview/backers.svg?width=890"></a>
+
+
+## Sponsors
+
+You can support this project by becoming a sponsor. Your logo will show up here with a link to your website. [Become a sponsor.](https://opencollective.com/cameraview#sponsor)
+
+<a href="https://opencollective.com/cameraview/sponsor/0/website" target="_blank"><img src="https://opencollective.com/cameraview/sponsor/0/avatar.svg"></a>
+<a href="https://opencollective.com/cameraview/sponsor/1/website" target="_blank"><img src="https://opencollective.com/cameraview/sponsor/1/avatar.svg"></a>
+<a href="https://opencollective.com/cameraview/sponsor/2/website" target="_blank"><img src="https://opencollective.com/cameraview/sponsor/2/avatar.svg"></a>
+<a href="https://opencollective.com/cameraview/sponsor/3/website" target="_blank"><img src="https://opencollective.com/cameraview/sponsor/3/avatar.svg"></a>
+<a href="https://opencollective.com/cameraview/sponsor/4/website" target="_blank"><img src="https://opencollective.com/cameraview/sponsor/4/avatar.svg"></a>
+<a href="https://opencollective.com/cameraview/sponsor/5/website" target="_blank"><img src="https://opencollective.com/cameraview/sponsor/5/avatar.svg"></a>
+<a href="https://opencollective.com/cameraview/sponsor/6/website" target="_blank"><img src="https://opencollective.com/cameraview/sponsor/6/avatar.svg"></a>
+<a href="https://opencollective.com/cameraview/sponsor/7/website" target="_blank"><img src="https://opencollective.com/cameraview/sponsor/7/avatar.svg"></a>
+<a href="https://opencollective.com/cameraview/sponsor/8/website" target="_blank"><img src="https://opencollective.com/cameraview/sponsor/8/avatar.svg"></a>
+<a href="https://opencollective.com/cameraview/sponsor/9/website" target="_blank"><img src="https://opencollective.com/cameraview/sponsor/9/avatar.svg"></a>
