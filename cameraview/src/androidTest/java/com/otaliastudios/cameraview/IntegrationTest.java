@@ -31,15 +31,8 @@ import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
 
 
-/**
- * These tests work great on real devices, and are the only way to test actual CameraController
- * implementation - we really need to open the camera device.
- * Unfortunately they fail unreliably on emulated devices, due to some bug with the
- * emulated camera controller. Waiting for it to be fixed.
- */
 @RunWith(AndroidJUnit4.class)
 @MediumTest
-@Ignore
 public class IntegrationTest extends BaseTest {
 
     @Rule
