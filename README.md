@@ -1,4 +1,4 @@
-G
+G.
 [![Build Status](https://travis-ci.org/natario1/CameraView.svg?branch=master)](https://travis-ci.org/natario1/CameraView)
 [![Code Coverage](https://codecov.io/gh/natario1/CameraView/branch/master/graph/badge.svg)](https://codecov.io/gh/natario1/CameraView)
 [![OpenCollective Backers](https://opencollective.com/cameraview/backers/badge.svg)](#backers)
