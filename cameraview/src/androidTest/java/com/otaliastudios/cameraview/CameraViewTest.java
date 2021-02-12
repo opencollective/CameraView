@@ -14,8 +14,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.util.List;
-
 import static org.junit.Assert.*;
 
 import static org.mockito.Mockito.*;
@@ -52,7 +50,7 @@ public class CameraViewTest extends BaseTest {
                     }
 
                     @Override
-                    protected boolean checkPermissions(SessionType sessionType, Audio audio) {
+                    protected boolean checkPermissions(Mode mode, Audio audio) {
                         return hasPermissions;
                     }
                 };
@@ -76,10 +74,9 @@ public class CameraViewTest extends BaseTest {
     public void testNullBeforeStart() {
         assertFalse(cameraView.isStarted());
         assertNull(cameraView.getCameraOptions());
-        assertNull(cameraView.getExtraProperties());
-        assertNull(cameraView.getPreviewSize());
-        assertNull(cameraView.getPictureSize());
         assertNull(cameraView.getSnapshotSize());
+        assertNull(cameraView.getPictureSize());
+        assertNull(cameraView.getVideoSize());
     }
 
     @Test
@@ -89,18 +86,18 @@ public class CameraViewTest extends BaseTest {
         assertEquals(cameraView.getFacing(), Facing.DEFAULT);
         assertEquals(cameraView.getGrid(), Grid.DEFAULT);
         assertEquals(cameraView.getWhiteBalance(), WhiteBalance.DEFAULT);
-        assertEquals(cameraView.getSessionType(), SessionType.DEFAULT);
+        assertEquals(cameraView.getMode(), Mode.DEFAULT);
         assertEquals(cameraView.getHdr(), Hdr.DEFAULT);
         assertEquals(cameraView.getAudio(), Audio.DEFAULT);
-        assertEquals(cameraView.getVideoQuality(), VideoQuality.DEFAULT);
+        assertEquals(cameraView.getVideoCodec(), VideoCodec.DEFAULT);
         assertEquals(cameraView.getLocation(), null);
         assertEquals(cameraView.getExposureCorrection(), 0f, 0f);
         assertEquals(cameraView.getZoom(), 0f, 0f);
+        assertEquals(cameraView.getVideoMaxDuration(), 0, 0);
+        assertEquals(cameraView.getVideoMaxSize(), 0, 0);
 
         // Self managed
         assertEquals(cameraView.getPlaySounds(), CameraView.DEFAULT_PLAY_SOUNDS);
-        assertEquals(cameraView.getCropOutput(), CameraView.DEFAULT_CROP_OUTPUT);
-        assertEquals(cameraView.getJpegQuality(), CameraView.DEFAULT_JPEG_QUALITY);
         assertEquals(cameraView.getGestureAction(Gesture.TAP), GestureAction.DEFAULT_TAP);
         assertEquals(cameraView.getGestureAction(Gesture.LONG_TAP), GestureAction.DEFAULT_LONG_TAP);
         assertEquals(cameraView.getGestureAction(Gesture.PINCH), GestureAction.DEFAULT_PINCH);
@@ -457,32 +454,11 @@ public class CameraViewTest extends BaseTest {
     //region test setParameters
 
     @Test
-    public void testSetCropOutput() {
-        cameraView.setCropOutput(true);
-        assertTrue(cameraView.getCropOutput());
-        cameraView.setCropOutput(false);
-        assertFalse(cameraView.getCropOutput());
-    }
-
-    @Test
-    public void testSetJpegQuality() {
-        cameraView.setJpegQuality(10);
-        assertEquals(cameraView.getJpegQuality(), 10);
-        cameraView.setJpegQuality(100);
-        assertEquals(cameraView.getJpegQuality(), 100);
-    }
-
-    @Test
     public void testSetPlaySounds() {
         cameraView.setPlaySounds(true);
         assertEquals(cameraView.getPlaySounds(), true);
         cameraView.setPlaySounds(false);
         assertEquals(cameraView.getPlaySounds(), false);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testSetJpegQuality_illegal() {
-        cameraView.setJpegQuality(-10);
     }
 
     @Test
@@ -527,11 +503,11 @@ public class CameraViewTest extends BaseTest {
     }
 
     @Test
-    public void testSessionType() {
-        cameraView.set(SessionType.VIDEO);
-        assertEquals(cameraView.getSessionType(), SessionType.VIDEO);
-        cameraView.set(SessionType.PICTURE);
-        assertEquals(cameraView.getSessionType(), SessionType.PICTURE);
+    public void testMode() {
+        cameraView.set(Mode.VIDEO);
+        assertEquals(cameraView.getMode(), Mode.VIDEO);
+        cameraView.set(Mode.PICTURE);
+        assertEquals(cameraView.getMode(), Mode.PICTURE);
     }
 
     @Test
@@ -551,11 +527,11 @@ public class CameraViewTest extends BaseTest {
     }
 
     @Test
-    public void testVideoQuality() {
-        cameraView.set(VideoQuality.MAX_1080P);
-        assertEquals(cameraView.getVideoQuality(), VideoQuality.MAX_1080P);
-        cameraView.set(VideoQuality.LOWEST);
-        assertEquals(cameraView.getVideoQuality(), VideoQuality.LOWEST);
+    public void testVideoCodec() {
+        cameraView.set(VideoCodec.H_263);
+        assertEquals(cameraView.getVideoCodec(), VideoCodec.H_263);
+        cameraView.set(VideoCodec.H_264);
+        assertEquals(cameraView.getVideoCodec(), VideoCodec.H_264);
     }
 
     @Test
@@ -565,6 +541,27 @@ public class CameraViewTest extends BaseTest {
         SizeSelector result = mockController.getPictureSizeSelector();
         assertNotNull(result);
         assertEquals(result, source);
+    }
+
+    @Test
+    public void testVideoSizeSelector() {
+        SizeSelector source = SizeSelectors.minHeight(50);
+        cameraView.setVideoSize(source);
+        SizeSelector result = mockController.getVideoSizeSelector();
+        assertNotNull(result);
+        assertEquals(result, source);
+    }
+
+    @Test
+    public void testVideoMaxSize() {
+        cameraView.setVideoMaxSize(5000);
+        assertEquals(cameraView.getVideoMaxSize(), 5000);
+    }
+
+    @Test
+    public void testVideoMaxDuration() {
+        cameraView.setVideoMaxDuration(5000);
+        assertEquals(cameraView.getVideoMaxDuration(), 5000);
     }
 
     //endregion
