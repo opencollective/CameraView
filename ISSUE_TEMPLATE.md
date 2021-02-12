@@ -26,3 +26,6 @@ to add logs to logcat, and `CameraLogger.registerLogger()`
 to handle logs yourself (e.g. export to file or a crash reporting service)
 so you can collect data from your users.*
 
+<!-- Love CameraView? Please consider supporting our work:
+     https://opencollective.com/cameraview/donate -->
+
